@@ -1,9 +1,6 @@
 mod addresses;
 mod instructions;
 mod registers;
-pub mod bus;
-
-use bus::Bus;
 
 use crate::{
     addresses::addresses::IRQ_VECTOR,
@@ -18,7 +15,8 @@ pub struct Cpu {
     pub state: State,         // CPU state
     pub registers: Registers, // Registers
 
-    pub bus: Box<Bus>, // Bus
+    pub bus_read: fn(u16) -> u8,  // Function pointer to the bus read function
+    pub bus_write: fn(u16, u8),   // Function pointer to the bus write function
 
     pub cycles: u8,    // Number of cycles remaining for current instruction
     pub temp: u16,     // Temporary storage for various operations
@@ -80,7 +78,8 @@ impl Cpu {
             opcode: 0,
             fetched: 0,
 
-            bus: Box::new(Bus::new()),
+            bus_read: |_address| -> u8 { return 0 },
+            bus_write: |_address, _data| {},
 
             enable_illegal_opcodes: false,
         }
@@ -112,7 +111,7 @@ impl Cpu {
 
     pub fn read(&mut self, address: u16) -> u8 {
         // Read a byte from the bus
-        return self.bus.bus_read(address);
+        return (self.bus_read)(address);
     }
 
     pub fn read_word(&mut self, address: u16) -> u16 {
@@ -123,7 +122,7 @@ impl Cpu {
 
     pub fn write(&mut self, address: u16, data: u8) {
         // Write a byte to the bus
-        (self.bus.bus_write(address, data));
+        (self.bus_write)(address, data);
     }
 
     pub fn write_word(&mut self, address: u16, data: u16) {
