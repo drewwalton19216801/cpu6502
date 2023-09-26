@@ -64,7 +64,7 @@ pub enum State {
 }
 
 impl Cpu {
-    pub fn new(bus_read: Box<dyn FnMut(u16) -> u8>, bus_write: Box<dyn FnMut(u16, u8)>) -> Self {
+    pub fn new() -> Self {
         Self {
             registers: Registers::new(),
             variant: Variant::CMOS,
@@ -78,11 +78,16 @@ impl Cpu {
             opcode: 0,
             fetched: 0,
 
-            bus_read: bus_read,
-            bus_write: bus_write,
+            bus_read: Box::new(|_| 0),
+            bus_write: Box::new(|_, _| {}),
 
             enable_illegal_opcodes: false,
         }
+    }
+
+    pub fn connect_bus(&mut self, bus_read: Box<dyn FnMut(u16) -> u8>, bus_write: Box<dyn FnMut(u16, u8)>) {
+        self.bus_read = bus_read;
+        self.bus_write = bus_write;
     }
 
     pub fn dump_cycles(&self) {
