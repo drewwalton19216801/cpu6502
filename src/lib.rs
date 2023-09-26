@@ -1,6 +1,9 @@
 mod addresses;
 mod instructions;
 mod registers;
+mod bus;
+
+use bus::Bus;
 
 use crate::{
     addresses::addresses::IRQ_VECTOR,
@@ -15,8 +18,7 @@ pub struct Cpu {
     pub state: State,         // CPU state
     pub registers: Registers, // Registers
 
-    pub bus_read: Box<dyn FnMut(u16) -> u8>,
-    pub bus_write: Box<dyn FnMut(u16, u8)>,
+    pub bus: Box<Bus>, // Bus
 
     pub cycles: u8,    // Number of cycles remaining for current instruction
     pub temp: u16,     // Temporary storage for various operations
@@ -78,16 +80,10 @@ impl Cpu {
             opcode: 0,
             fetched: 0,
 
-            bus_read: Box::new(|_| 0),
-            bus_write: Box::new(|_, _| {}),
+            bus: Box::new(Bus::new()),
 
             enable_illegal_opcodes: false,
         }
-    }
-
-    pub fn connect_bus(&mut self, bus_read: Box<dyn FnMut(u16) -> u8>, bus_write: Box<dyn FnMut(u16, u8)>) {
-        self.bus_read = bus_read;
-        self.bus_write = bus_write;
     }
 
     pub fn dump_cycles(&self) {
@@ -116,7 +112,7 @@ impl Cpu {
 
     pub fn read(&mut self, address: u16) -> u8 {
         // Read a byte from the bus
-        return (self.bus_read)(address);
+        return (self.bus.bus_read(address));
     }
 
     pub fn read_word(&mut self, address: u16) -> u16 {
@@ -127,7 +123,7 @@ impl Cpu {
 
     pub fn write(&mut self, address: u16, data: u8) {
         // Write a byte to the bus
-        (self.bus_write)(address, data);
+        (self.bus.bus_write(address, data));
     }
 
     pub fn write_word(&mut self, address: u16, data: u16) {
