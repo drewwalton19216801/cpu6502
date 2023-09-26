@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, sync::Arc};
 
 #[derive(Clone)]
 pub struct Bus {
@@ -10,8 +10,8 @@ pub struct Bus {
 
 #[derive(Clone)]
 pub struct Hook {
-    pub read: Option<Rc<RefCell<dyn FnMut(u16) -> u8>>>,
-    pub write: Option<Rc<RefCell<dyn FnMut(u16, u8)>>>,
+    pub read: Option<Arc<RefCell<dyn FnMut(u16) -> u8>>>,
+    pub write: Option<Arc<RefCell<dyn FnMut(u16, u8)>>>,
 }
 
 impl Bus {
