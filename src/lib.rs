@@ -112,7 +112,7 @@ impl Cpu {
 
     pub fn read(&mut self, address: u16) -> u8 {
         // Read a byte from the bus
-        return (self.bus.bus_read(address));
+        return self.bus.bus_read(address);
     }
 
     pub fn read_word(&mut self, address: u16) -> u16 {
