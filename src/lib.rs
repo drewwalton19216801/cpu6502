@@ -15,8 +15,8 @@ pub struct Cpu {
     pub state: State,         // CPU state
     pub registers: Registers, // Registers
 
-    pub bus_read: fn(u16) -> u8,  // Function pointer to the bus read function
-    pub bus_write: fn(u16, u8),   // Function pointer to the bus write function
+    pub bus_read: Box<dyn FnMut(u16) -> u8>, // Function pointer to the bus read function
+    pub bus_write: Box<dyn FnMut(u16, u8)>, // Function pointer to the bus write function
 
     pub cycles: u8,    // Number of cycles remaining for current instruction
     pub temp: u16,     // Temporary storage for various operations
@@ -78,8 +78,8 @@ impl Cpu {
             opcode: 0,
             fetched: 0,
 
-            bus_read: |_address| -> u8 { return 0 },
-            bus_write: |_address, _data| {},
+            bus_read: Box::new(|_| -> u8 { return 0 }),
+            bus_write: Box::new(|_, _| {}),
 
             enable_illegal_opcodes: false,
         }
