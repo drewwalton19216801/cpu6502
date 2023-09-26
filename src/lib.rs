@@ -1,7 +1,7 @@
 mod addresses;
 mod instructions;
 mod registers;
-mod bus;
+pub mod bus;
 
 use bus::Bus;
 
