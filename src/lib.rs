@@ -1,12 +1,17 @@
 mod addresses;
+pub mod bus;
 mod instructions;
 mod registers;
+pub mod device;
+
+use bus::Bus;
+use instructions::INSTRUCTION_LIST;
 
 use crate::{
     addresses::addresses::IRQ_VECTOR,
     addresses::addresses::NMI_VECTOR,
     addresses::addresses::RESET_VECTOR,
-    instructions::{execute_instruction, AddressingMode},
+    instructions::AddressingMode,
     registers::registers::Registers,
 };
 
@@ -15,8 +20,7 @@ pub struct Cpu {
     pub state: State,         // CPU state
     pub registers: Registers, // Registers
 
-    pub bus_read: Box<dyn FnMut(u16) -> u8>, // Function pointer to the bus read function
-    pub bus_write: Box<dyn FnMut(u16, u8)>, // Function pointer to the bus write function
+    pub bus: Box<dyn Bus>, // Bus
 
     pub cycles: u8,    // Number of cycles remaining for current instruction
     pub temp: u16,     // Temporary storage for various operations
@@ -64,7 +68,11 @@ pub enum State {
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
+        Self::new(Box::new(bus::DefaultBus::default()))
+    }
+
+    pub fn new(bus: Box<dyn Bus>) -> Self {
         Self {
             registers: Registers::new(),
             variant: Variant::CMOS,
@@ -78,8 +86,7 @@ impl Cpu {
             opcode: 0,
             fetched: 0,
 
-            bus_read: Box::new(|_| -> u8 { return 0 }),
-            bus_write: Box::new(|_, _| {}),
+            bus,
 
             enable_illegal_opcodes: false,
         }
@@ -110,8 +117,8 @@ impl Cpu {
     }
 
     pub fn read(&mut self, address: u16) -> u8 {
-        // Read a byte from the bus
-        return (self.bus_read)(address);
+        let data = self.bus.read(address);
+        return data;
     }
 
     pub fn read_word(&mut self, address: u16) -> u16 {
@@ -121,8 +128,7 @@ impl Cpu {
     }
 
     pub fn write(&mut self, address: u16, data: u8) {
-        // Write a byte to the bus
-        (self.bus_write)(address, data);
+        self.bus.write(address, data);
     }
 
     pub fn write_word(&mut self, address: u16, data: u16) {
@@ -167,6 +173,11 @@ impl Cpu {
         return (hi << 8) | lo;
     }
 
+    pub fn execute_instruction(&mut self, opcode: u8) -> u8 {
+        let instruction = &INSTRUCTION_LIST[opcode as usize];
+        (instruction.function)(self)
+    }
+
     pub fn clock(&mut self) {
         // If we have no cycles remaining, fetch the next opcode
         if self.cycles == 0 {
@@ -188,9 +199,9 @@ impl Cpu {
             let cycles_addr = self.execute_addr_mode(addr_mode);
 
             // Execute the instruction, getting the number of cycles required
-            let cycles_insn = execute_instruction(self.opcode, self);
+            let cycles_insn = self.execute_instruction(self.opcode);
 
-            // Add the number of cycles required by the addressing mode and the instruction
+            // Add the number of cycles required for the addressing mode and the instruction
             self.cycles += cycles_addr + cycles_insn;
         }
 

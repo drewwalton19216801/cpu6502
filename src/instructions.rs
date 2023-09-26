@@ -1828,11 +1828,6 @@ pub fn get_addr_mode(opcode: u8) -> AddressingMode {
     INSTRUCTION_LIST[opcode as usize].mode
 }
 
-pub fn execute_instruction(opcode: u8, cpu: &mut Cpu) -> u8 {
-    let instruction = &INSTRUCTION_LIST[opcode as usize];
-    (instruction.function)(cpu)
-}
-
 pub fn print_instruction_list() {
     println!("OPCODE\tNAME\tMODE\tCYCLES");
     for instruction in INSTRUCTION_LIST.iter() {
