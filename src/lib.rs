@@ -31,6 +31,7 @@ pub struct Cpu {
     pub enable_illegal_opcodes: bool, // Enable illegal opcodes
 
     pub current_instruction_string: String, // Current instruction string
+    pub debug: bool,       // Print debug information?
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -68,11 +69,11 @@ pub enum State {
 }
 
 impl Cpu {
-    pub fn default() -> Self {
-        Self::new(Box::new(bus::DefaultBus::default()))
+    pub fn default(debug: bool) -> Self {
+        Self::new(Box::new(bus::DefaultBus::default()), debug)
     }
 
-    pub fn new(bus: Box<dyn Bus>) -> Self {
+    pub fn new(bus: Box<dyn Bus>, debug: bool) -> Self {
         Self {
             registers: Registers::new(),
             variant: Variant::CMOS,
@@ -91,6 +92,7 @@ impl Cpu {
             enable_illegal_opcodes: false,
 
             current_instruction_string: String::from(""),
+            debug: debug,
         }
     }
 
@@ -180,10 +182,15 @@ impl Cpu {
         (instruction.function)(self)
     }
 
-    pub fn get_operand_string(&self, mode: AddressingMode, address: u16) -> String {
+    pub fn get_operand_string(&mut self, mode: AddressingMode, address: u16) -> String {
         match mode {
             AddressingMode::Implied => return String::from(""),
-            AddressingMode::Immediate => return format!("#${:02X}", address),
+            AddressingMode::Immediate => {
+                // Get the value at the address
+                let value = self.read(address);
+                // Return the value as decimal
+                return format!("#${:02X}", value);
+            },
             AddressingMode::ZeroPage => return format!("${:02X}", address),
             AddressingMode::ZeroPageX => return format!("${:02X},X", address),
             AddressingMode::ZeroPageY => return format!("${:02X},Y", address),
@@ -202,7 +209,7 @@ impl Cpu {
         let instruction = &INSTRUCTION_LIST[opcode as usize];
         let addr_mode = instructions::get_addr_mode(opcode);
         let addr_str = self.get_operand_string(addr_mode, from_pc + 1);
-        format!("{} {}", instruction.name, addr_str)
+        return format!("{} {}", instruction.name, addr_str);
     }
 
     pub fn clock(&mut self) {
@@ -211,6 +218,9 @@ impl Cpu {
             // Set state to fetching
             self.state = State::Fetching;
             self.current_instruction_string = self.disassemble_instruction_at(self.registers.pc);
+            if self.debug {
+                println!("{}", self.current_instruction_string);
+            }
             self.opcode = self.read(self.registers.pc);
             self.registers.pc += 1;
 
@@ -437,7 +447,60 @@ impl Cpu {
      * CPU instructions
      */
     pub fn adc(&mut self) -> u8 {
-        return 0;
+        let mut extraCycle: u8 = 0;
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the addition
+        self.temp = self.registers.a as u16 + self.fetched as u16 + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
+
+        // Set the zero flag if the result is 0
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0);
+
+        // if the CPU variant is NOT NES, check for decimal flag
+        if self.variant != Variant::NES {
+            // If the decimal flag is set, perform BCD addition
+            if self.registers.get_flag(registers::registers::Flag::DecimalMode) {
+                // If the result is greater than 99, set the carry flag
+                if self.temp > 99 {
+                    self.registers
+                        .set_flag(registers::registers::Flag::Carry, true);
+                }
+
+                // Set the accumulator to the result modulo 100
+                self.registers.a = (self.temp % 100) as u8;
+
+                // Set the negative flag if the result is negative
+                self.registers
+                    .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+
+                // Set the overflow flag if the result is greater than 99
+                self.registers
+                    .set_flag(registers::registers::Flag::Overflow, self.temp > 99);
+
+                // We did decimal addition, so add an extra cycle
+                extraCycle = 1;
+            }
+        } else {
+            // Set the negative flag if the result is negative
+            self.registers
+                .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+
+            // Set the overflow flag if the result is greater than 127 or less than -128
+            self.registers
+                .set_flag(registers::registers::Flag::Overflow, ((self.registers.a ^ self.fetched) & 0x80 == 0) && ((self.fetched ^ self.temp as u8) & 0x80 != 0));
+
+            // Set the carry flag if the result is greater than 255
+            self.registers
+                .set_flag(registers::registers::Flag::Carry, self.temp > 255);
+        }
+
+        // Store the result in the accumulator
+        self.registers.a = (self.temp & 0x00FF) as u8;
+
+        // Return the number of cycles required
+        return extraCycle;
     }
     pub fn and(&mut self) -> u8 {
         // Fetch the next byte from memory
@@ -458,6 +521,34 @@ impl Cpu {
         return 1;
     }
     pub fn asl(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Shift the fetched byte left by 1 bit
+        self.temp = self.fetched as u16;
+        self.temp <<= 1;
+
+        // Set the carry flag if the 9th bit of the temp variable is 1
+        self.registers
+            .set_flag(registers::registers::Flag::Carry, (self.temp & 0xFF00) > 0);
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.temp & 0x80) > 0,
+        );
+
+        // If we are in implied mode, store the temp variable in the accumulator
+        if self.addr_mode == AddressingMode::Implied {
+            self.registers.a = (self.temp & 0x00FF) as u8;
+        } else {
+            // Otherwise, store the temp variable in memory
+            self.write(self.addr_abs, (self.temp & 0x00FF) as u8);
+        }
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn bcc(&mut self) -> u8 {
@@ -534,6 +625,11 @@ impl Cpu {
         return 0;
     }
     pub fn clc(&mut self) -> u8 {
+        // Set the carry flag to 0
+        self.registers
+            .set_flag(registers::registers::Flag::Carry, false);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn cld(&mut self) -> u8 {
