@@ -447,7 +447,7 @@ impl Cpu {
      * CPU instructions
      */
     pub fn adc(&mut self) -> u8 {
-        let mut extraCycle: u8 = 0;
+        let mut extra_cycle: u8 = 0;
         // Fetch the next byte from memory
         self.fetch();
 
@@ -480,7 +480,7 @@ impl Cpu {
                     .set_flag(registers::registers::Flag::Overflow, self.temp > 99);
 
                 // We did decimal addition, so add an extra cycle
-                extraCycle = 1;
+                extra_cycle = 1;
             }
         } else {
             // Set the negative flag if the result is negative
@@ -500,7 +500,7 @@ impl Cpu {
         self.registers.a = (self.temp & 0x00FF) as u8;
 
         // Return the number of cycles required
-        return extraCycle;
+        return extra_cycle;
     }
     pub fn and(&mut self) -> u8 {
         // Fetch the next byte from memory
