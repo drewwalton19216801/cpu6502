@@ -558,6 +558,24 @@ impl Cpu {
         return 0;
     }
     pub fn beq(&mut self) -> u8 {
+        // If the zero flag is 1, branch
+        if self.registers.get_flag(registers::registers::Flag::Zero) {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn bit(&mut self) -> u8 {
@@ -622,6 +640,24 @@ impl Cpu {
         return 0;
     }
     pub fn bvs(&mut self) -> u8 {
+        // If the overflow flag is 1, branch
+        if self.registers.get_flag(registers::registers::Flag::Overflow) {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn clc(&mut self) -> u8 {
