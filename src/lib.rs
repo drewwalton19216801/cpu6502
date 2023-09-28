@@ -820,9 +820,25 @@ impl Cpu {
         return 0;
     }
     pub fn rti(&mut self) -> u8 {
+        // Pop the status flags from the stack
+        self.registers.flags = self.pop();
+
+        self.registers
+            .set_flag(registers::registers::Flag::Break, false);
+        self.registers
+            .set_flag(registers::registers::Flag::Unused, false);
+
+        // Pop the program counter from the stack
+        self.registers.pc = self.pop_word();
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn rts(&mut self) -> u8 {
+        // Pop the program counter from the stack and increment it
+        self.registers.pc = self.pop_word() + 1;
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn sbc(&mut self) -> u8 {
