@@ -29,6 +29,8 @@ pub struct Cpu {
     pub fetched: u8,   // Fetched data
 
     pub enable_illegal_opcodes: bool, // Enable illegal opcodes
+
+    pub current_instruction_string: String, // Current instruction string
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -87,6 +89,8 @@ impl Cpu {
             bus,
 
             enable_illegal_opcodes: false,
+
+            current_instruction_string: String::from(""),
         }
     }
 
@@ -176,11 +180,37 @@ impl Cpu {
         (instruction.function)(self)
     }
 
+    pub fn get_operand_string(&self, mode: AddressingMode, address: u16) -> String {
+        match mode {
+            AddressingMode::Implied => return String::from(""),
+            AddressingMode::Immediate => return format!("#${:02X}", address),
+            AddressingMode::ZeroPage => return format!("${:02X}", address),
+            AddressingMode::ZeroPageX => return format!("${:02X},X", address),
+            AddressingMode::ZeroPageY => return format!("${:02X},Y", address),
+            AddressingMode::Relative => return format!("${:02X}", address),
+            AddressingMode::Absolute => return format!("${:04X}", address),
+            AddressingMode::AbsoluteX => return format!("${:04X},X", address),
+            AddressingMode::AbsoluteY => return format!("${:04X},Y", address),
+            AddressingMode::Indirect => return format!("(${:04X})", address),
+            AddressingMode::IndexedIndirect => return format!("(${:02X},X)", address),
+            AddressingMode::IndirectIndexed => return format!("(${:02X}),Y", address),
+        }
+    }
+
+    pub fn disassemble_instruction_at(&mut self, from_pc: u16) -> String {
+        let opcode = self.read(from_pc);
+        let instruction = &INSTRUCTION_LIST[opcode as usize];
+        let addr_mode = instructions::get_addr_mode(opcode);
+        let addr_str = self.get_operand_string(addr_mode, from_pc + 1);
+        format!("{} {}", instruction.name, addr_str)
+    }
+
     pub fn clock(&mut self) {
         // If we have no cycles remaining, fetch the next opcode
         if self.cycles == 0 {
             // Set state to fetching
             self.state = State::Fetching;
+            self.current_instruction_string = self.disassemble_instruction_at(self.registers.pc);
             self.opcode = self.read(self.registers.pc);
             self.registers.pc += 1;
 
