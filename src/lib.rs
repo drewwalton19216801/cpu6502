@@ -1,17 +1,15 @@
 mod addresses;
 pub mod bus;
+pub mod device;
 mod instructions;
 mod registers;
-pub mod device;
 
 use bus::Bus;
 use instructions::INSTRUCTION_LIST;
 
 use crate::{
-    addresses::addresses::IRQ_VECTOR,
-    addresses::addresses::NMI_VECTOR,
-    addresses::addresses::RESET_VECTOR,
-    instructions::AddressingMode,
+    addresses::addresses::IRQ_VECTOR, addresses::addresses::NMI_VECTOR,
+    addresses::addresses::RESET_VECTOR, instructions::AddressingMode,
     registers::registers::Registers,
 };
 
@@ -559,7 +557,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.x & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.x & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 1;
@@ -574,7 +575,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.y & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.y & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 1;
@@ -589,15 +593,51 @@ impl Cpu {
         return 0;
     }
     pub fn pha(&mut self) -> u8 {
+        // Push the accumulator to the stack
+        self.push(self.registers.a);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn php(&mut self) -> u8 {
+        // Push the flags to the stack
+        self.push(self.registers.flags);
+
+        // Set break flag to 0
+        self.registers
+            .set_flag(registers::registers::Flag::Break, false);
+
+        // Set unused flag to 1
+        self.registers
+            .set_flag(registers::registers::Flag::Unused, true);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn pla(&mut self) -> u8 {
+        // Pop the next byte from the stack into the accumulator
+        self.registers.a = self.pop();
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.a & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn plp(&mut self) -> u8 {
+        // Pop the status flags from the stack
+        self.registers.flags = self.pop();
+
+        // Set the unused flag to 1
+        self.registers
+            .set_flag(registers::registers::Flag::Unused, true);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn rol(&mut self) -> u8 {
@@ -792,7 +832,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.x & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.x & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 0;
@@ -804,7 +847,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.y & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.y & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 0;
@@ -816,7 +862,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.x & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.x & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 0;
@@ -828,7 +877,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.a & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.a & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 0;
@@ -847,7 +899,10 @@ impl Cpu {
         // Set the Zero and Negative flags
         self.registers
             .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
-        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.a & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.a & 0x80) > 0,
+        );
 
         // Return the number of cycles required
         return 0;
