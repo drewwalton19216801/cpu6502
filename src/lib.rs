@@ -522,6 +522,13 @@ impl Cpu {
         return 0;
     }
     pub fn jsr(&mut self) -> u8 {
+        // Push the program counter to the stack
+        self.push_word(self.registers.pc - 1);
+
+        // Set the program counter to the absolute address
+        self.registers.pc = self.addr_abs;
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn lda(&mut self) -> u8 {
@@ -543,10 +550,34 @@ impl Cpu {
         return 1;
     }
     pub fn ldx(&mut self) -> u8 {
-        return 0;
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Load the fetched byte into the X register
+        self.registers.x = self.fetched;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.x & 0x80) > 0);
+
+        // Return the number of cycles required
+        return 1;
     }
     pub fn ldy(&mut self) -> u8 {
-        return 0;
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Load the fetched byte into the Y register
+        self.registers.y = self.fetched;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.y & 0x80) > 0);
+
+        // Return the number of cycles required
+        return 1;
     }
     pub fn lsr(&mut self) -> u8 {
         return 0;
@@ -741,27 +772,84 @@ impl Cpu {
         return 0;
     }
     pub fn stx(&mut self) -> u8 {
+        // Store the X register in memory
+        self.write(self.addr_abs, self.registers.x);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn sty(&mut self) -> u8 {
+        // Store the Y register in memory
+        self.write(self.addr_abs, self.registers.y);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn tax(&mut self) -> u8 {
+        // Load the accumulator into the X register
+        self.registers.x = self.registers.a;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.x & 0x80) > 0);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn tay(&mut self) -> u8 {
+        // Load the accumulator into the Y register
+        self.registers.y = self.registers.a;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.y & 0x80) > 0);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn tsx(&mut self) -> u8 {
+        // Load the stack pointer into the X register
+        self.registers.x = self.registers.sp;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.x & 0x80) > 0);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn txa(&mut self) -> u8 {
+        // Load the X register into the accumulator
+        self.registers.a = self.registers.x;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.a & 0x80) > 0);
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn txs(&mut self) -> u8 {
+        // Load the X register into the stack pointer
+        self.registers.sp = self.registers.x;
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn tya(&mut self) -> u8 {
+        // Load the Y register into the accumulator
+        self.registers.a = self.registers.y;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+        self.registers.set_flag(registers::registers::Flag::Negative, (self.registers.a & 0x80) > 0);
+
+        // Return the number of cycles required
         return 0;
     }
 
