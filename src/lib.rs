@@ -410,7 +410,22 @@ impl Cpu {
         return 0;
     }
     pub fn and(&mut self) -> u8 {
-        return 0;
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the AND operation
+        self.registers.a &= self.fetched;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.a & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
+        return 1;
     }
     pub fn asl(&mut self) -> u8 {
         return 0;
@@ -431,6 +446,24 @@ impl Cpu {
         return 0;
     }
     pub fn bne(&mut self) -> u8 {
+        // If the zero flag is 0, branch
+        if self.registers.get_flag(registers::registers::Flag::Zero) == false {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
+        // Return the number of cycles required
         return 0;
     }
     pub fn bpl(&mut self) -> u8 {
