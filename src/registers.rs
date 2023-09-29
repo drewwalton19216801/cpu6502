@@ -51,6 +51,48 @@ pub mod registers {
         pub fn decrement_sp(&mut self) {
             self.sp = self.sp.wrapping_sub(1);
         }
+
+        pub fn get_status_string(&mut self) -> String {
+            let mut status = String::new();
+            status.push_str("STATUS: ");
+            status.push_str(if self.get_flag(Flag::Negative) {
+                "N"
+            } else {
+                "n"
+            });
+            status.push_str(if self.get_flag(Flag::Overflow) {
+                "V"
+            } else {
+                "v"
+            });
+            status.push_str("-");
+            status.push_str(if self.get_flag(Flag::Break) {
+                "B"
+            } else {
+                "b"
+            });
+            status.push_str(if self.get_flag(Flag::DecimalMode) {
+                "D"
+            } else {
+                "d"
+            });
+            status.push_str(if self.get_flag(Flag::InterruptDisable) {
+                "I"
+            } else {
+                "i"
+            });
+            status.push_str(if self.get_flag(Flag::Zero) {
+                "Z"
+            } else {
+                "z"
+            });
+            status.push_str(if self.get_flag(Flag::Carry) {
+                "C"
+            } else {
+                "c"
+            });
+            status
+        }
     }
 
     #[cfg(test)]

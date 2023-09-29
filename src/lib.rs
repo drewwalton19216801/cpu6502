@@ -1,3 +1,9 @@
+//! A 6502 emulator library written in Rust.
+//!
+//! Aims to provide a simple, easy-to-use interface for emulating the 6502 CPU.
+//! The CPU connects to a bus, and your emulator can define any number of devices
+//! on the bus. The CPU can then read and write to these devices.
+
 mod addresses;
 pub mod bus;
 pub mod device;
@@ -195,9 +201,24 @@ impl Cpu {
             AddressingMode::ZeroPageX => return format!("${:02X},X", address),
             AddressingMode::ZeroPageY => return format!("${:02X},Y", address),
             AddressingMode::Relative => return format!("${:02X}", address),
-            AddressingMode::Absolute => return format!("${:04X}", address),
-            AddressingMode::AbsoluteX => return format!("${:04X},X", address),
-            AddressingMode::AbsoluteY => return format!("${:04X},Y", address),
+            AddressingMode::Absolute => {
+                // Get the value at the address
+                let value = self.read_word(address);
+                // Return the value as decimal
+                return format!("${:04X}", value);
+            }
+            AddressingMode::AbsoluteX => {
+                // Get the value at the address
+                let value = self.read_word(address);
+                // Return the value as decimal
+                return format!("${:04X},X", value);
+            }
+            AddressingMode::AbsoluteY => {
+                // Get the value at the address
+                let value = self.read_word(address);
+                // Return the value as decimal
+                return format!("${:04X},Y", value);
+            }
             AddressingMode::Indirect => return format!("(${:04X})", address),
             AddressingMode::IndexedIndirect => return format!("(${:02X},X)", address),
             AddressingMode::IndirectIndexed => return format!("(${:02X}),Y", address),
@@ -219,7 +240,20 @@ impl Cpu {
             self.state = State::Fetching;
             self.current_instruction_string = self.disassemble_instruction_at(self.registers.pc);
             if self.debug {
-                println!("{}", self.current_instruction_string);
+                let reg_status = self.registers.get_status_string();
+                // Print the instruction and the registers
+                println!(
+                    "{:04X}  {:<32} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} {} {:02X}",
+                    self.registers.pc,
+                    self.current_instruction_string,
+                    self.registers.a,
+                    self.registers.x,
+                    self.registers.y,
+                    self.registers.flags,
+                    self.registers.sp,
+                    reg_status,
+                    self.opcode
+                );
             }
             self.opcode = self.read(self.registers.pc);
             self.registers.pc += 1;
@@ -341,7 +375,7 @@ impl Cpu {
     }
 
     /**
-     * Addressing modes (https://wiki.nesdev.com/w/index.php/CPU_addressing_modes)
+     * Addressing modes <https://wiki.nesdev.com/w/index.php/CPU_addressing_modes>
      */
     pub fn addr_implied(&mut self) -> u8 {
         self.fetched = self.registers.a;
@@ -451,13 +485,12 @@ impl Cpu {
     /// accumulator to the result. Decimal mode is supported on the original NMOS 6502 and the 65C02.
     pub fn adc(&mut self) -> u8 {
         let mut extra_cycle: u8 = 0;
+
         // Fetch the next byte from memory
         self.fetch();
 
         // Perform the addition
-        self.temp = self.registers.a as u16
-            + self.fetched as u16
-            + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
+        self.temp = self.registers.a as u16 + self.fetched as u16 + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
 
         // Set the zero flag if the result is 0
         self.registers
@@ -466,28 +499,34 @@ impl Cpu {
         // if the CPU variant is NOT NES, check for decimal flag
         if self.variant != Variant::NES {
             // If the decimal flag is set, perform BCD addition
-            if self
-                .registers
-                .get_flag(registers::registers::Flag::DecimalMode)
-            {
-                // If the result is greater than 99, set the carry flag
-                if self.temp > 99 {
-                    self.registers
-                        .set_flag(registers::registers::Flag::Carry, true);
-                }
+            if self.registers.get_flag(registers::registers::Flag::DecimalMode) {
 
-                // Set the accumulator to the result modulo 100
-                self.registers.a = (self.temp % 100) as u8;
+                // If the result is greater than 99, add 96 to it
+                if (self.registers.a & 0xF) + (self.fetched & 0xF) + (self.registers.get_flag(registers::registers::Flag::Carry) as u8) > 9 {
+                    self.temp += 6;
+                }
 
                 // Set the negative flag if the result is negative
                 self.registers
                     .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
 
-                // Set the overflow flag if the result is greater than 99
-                self.registers
-                    .set_flag(registers::registers::Flag::Overflow, self.temp > 99);
+                // Set the overflow flag if the result is greater than 127 or less than -128
+                self.registers.set_flag(
+                    registers::registers::Flag::Overflow,
+                    ((self.registers.a ^ self.fetched) & 0x80 == 0)
+                        && ((self.fetched ^ self.temp as u8) & 0x80 != 0),
+                );
 
-                // We did decimal addition, so add an extra cycle
+                // If the result is greater than 99, add 96 to it
+                if self.temp > 99 {
+                    self.temp += 96;
+                }
+
+                // Set the carry flag if the result is greater than 0x99
+                self.registers
+                    .set_flag(registers::registers::Flag::Carry, self.temp > 0x99FF);
+
+                // We used an extra cycle
                 extra_cycle = 1;
             }
         } else {
@@ -588,8 +627,8 @@ impl Cpu {
             // We branched, so add a cycle
             self.cycles += 1;
 
-            // Calculate the absolute address
-            self.addr_abs = self.registers.pc + self.addr_rel;
+            // Calculate the absolute address using wrapping_add
+            self.addr_abs = self.registers.pc.wrapping_add(self.addr_rel);
 
             // If the page changed, add another cycle
             if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
@@ -714,7 +753,13 @@ impl Cpu {
         return 0;
     }
 
+    /// Clear the decimal mode flag
     pub fn cld(&mut self) -> u8 {
+        // Set the decimal mode flag to 0
+        self.registers
+            .set_flag(registers::registers::Flag::DecimalMode, false);
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -726,8 +771,29 @@ impl Cpu {
         return 0;
     }
 
+    /// Compares the accumulator with a value in memory.
     pub fn cmp(&mut self) -> u8 {
-        return 0;
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the comparison with wrapping_sub
+        self.temp = self.registers.a as u16;
+        self.temp = self.temp.wrapping_sub(self.fetched as u16);
+
+        // Set the carry flag if the accumulator is greater than or equal to the fetched value
+        self.registers
+            .set_flag(registers::registers::Flag::Carry, self.registers.a >= self.fetched);
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0x0000);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.temp & 0x0080) > 0,
+        );
+
+        // Return the number of cycles required
+        return 1;
     }
 
     pub fn cpx(&mut self) -> u8 {
@@ -1150,14 +1216,87 @@ impl Cpu {
     }
 
     pub fn sbc(&mut self) -> u8 {
-        return 0;
+        let mut extra_cycle: u8 = 0;
+
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the subtraction using wrapping_sub
+        self.temp = (self.registers.a as u16)
+            .wrapping_sub(self.fetched as u16)
+            .wrapping_sub(1 - self.registers.get_flag(registers::registers::Flag::Carry) as u16);
+
+        // Set the zero flag if the result is 0
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0);
+
+        // If the CPU variant is NOT NES
+        if self.variant != Variant::NES {
+            // If the decimal flag is set, perform BCD subtraction
+            if self.registers.get_flag(registers::registers::Flag::DecimalMode) {
+                // Adjust the result for BCD
+                if (self.temp & 0x000F) > 0x0009 {
+                    self.temp -= 0x0006;
+                }
+
+                // Set the negative flag if the result is negative
+                self.registers
+                    .set_flag(registers::registers::Flag::Negative, (self.temp & 0x0080) > 0);
+
+                // Set the overflow flag if the result is greater than 127 or less than -128
+                self.registers.set_flag(
+                    registers::registers::Flag::Overflow,
+                    ((self.registers.a ^ self.temp as u8) & (self.fetched ^ self.temp as u8) & 0x80)
+                        > 0,
+                );
+
+                // Adjust the result for BCD
+                if self.temp > 0x99FF {
+                    self.temp += 0x0060;
+                }
+
+                // Set the carry flag if the result is greater than 127 or less than -128
+                self.registers
+                    .set_flag(registers::registers::Flag::Carry, self.temp > 0x99FF);
+
+                // We used an extra cycle
+                extra_cycle = 1;
+            }
+        } else {
+            // Set the negative flag if the result is negative
+            self.registers
+                .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+
+            // Set the overflow flag if the result is greater than 127 or less than -128
+            self.registers.set_flag(
+                registers::registers::Flag::Overflow,
+                ((self.registers.a ^ self.fetched) & 0x80 != 0)
+                    && ((self.fetched ^ self.temp as u8) & 0x80 != 0),
+            );
+
+            // Set the carry flag if the result is greater than 255
+            self.registers
+                .set_flag(registers::registers::Flag::Carry, self.temp > 255);
+        }
+
+        // Store the result in the accumulator
+        self.registers.a = (self.temp & 0x00FF) as u8;
+
+        // Return the number of cycles required
+        return extra_cycle;
     }
 
     pub fn sec(&mut self) -> u8 {
         return 0;
     }
 
+    /// Set the decimal mode flag
     pub fn sed(&mut self) -> u8 {
+        // Set the decimal mode flag to 1
+        self.registers
+            .set_flag(registers::registers::Flag::DecimalMode, true);
+
+        // Return the number of cycles required
         return 0;
     }
 
