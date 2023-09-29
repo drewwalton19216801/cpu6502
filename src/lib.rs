@@ -31,7 +31,7 @@ pub struct Cpu {
     pub enable_illegal_opcodes: bool, // Enable illegal opcodes
 
     pub current_instruction_string: String, // Current instruction string
-    pub debug: bool,       // Print debug information?
+    pub debug: bool,                        // Print debug information?
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -190,7 +190,7 @@ impl Cpu {
                 let value = self.read(address);
                 // Return the value as decimal
                 return format!("#${:02X}", value);
-            },
+            }
             AddressingMode::ZeroPage => return format!("${:02X}", address),
             AddressingMode::ZeroPageX => return format!("${:02X},X", address),
             AddressingMode::ZeroPageY => return format!("${:02X},Y", address),
@@ -446,13 +446,18 @@ impl Cpu {
     /**
      * CPU instructions
      */
+
+    /// Adds the value of the accumulator and the carry flag to a memory value, and sets the
+    /// accumulator to the result. Decimal mode is supported on the original NMOS 6502 and the 65C02.
     pub fn adc(&mut self) -> u8 {
         let mut extra_cycle: u8 = 0;
         // Fetch the next byte from memory
         self.fetch();
 
         // Perform the addition
-        self.temp = self.registers.a as u16 + self.fetched as u16 + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
+        self.temp = self.registers.a as u16
+            + self.fetched as u16
+            + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
 
         // Set the zero flag if the result is 0
         self.registers
@@ -461,7 +466,10 @@ impl Cpu {
         // if the CPU variant is NOT NES, check for decimal flag
         if self.variant != Variant::NES {
             // If the decimal flag is set, perform BCD addition
-            if self.registers.get_flag(registers::registers::Flag::DecimalMode) {
+            if self
+                .registers
+                .get_flag(registers::registers::Flag::DecimalMode)
+            {
                 // If the result is greater than 99, set the carry flag
                 if self.temp > 99 {
                     self.registers
@@ -488,8 +496,11 @@ impl Cpu {
                 .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
 
             // Set the overflow flag if the result is greater than 127 or less than -128
-            self.registers
-                .set_flag(registers::registers::Flag::Overflow, ((self.registers.a ^ self.fetched) & 0x80 == 0) && ((self.fetched ^ self.temp as u8) & 0x80 != 0));
+            self.registers.set_flag(
+                registers::registers::Flag::Overflow,
+                ((self.registers.a ^ self.fetched) & 0x80 == 0)
+                    && ((self.fetched ^ self.temp as u8) & 0x80 != 0),
+            );
 
             // Set the carry flag if the result is greater than 255
             self.registers
@@ -502,6 +513,9 @@ impl Cpu {
         // Return the number of cycles required
         return extra_cycle;
     }
+
+    /// Performs a bitwise AND operation between the accumulator and a value in memory,
+    /// and stores the result in the accumulator.
     pub fn and(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
@@ -520,6 +534,9 @@ impl Cpu {
         // Return the number of cycles required
         return 1;
     }
+
+    /// Shifts the accumulator left by one bit, setting the carry flag if the most significant bit is set.
+    /// Returns the new value of the accumulator.
     pub fn asl(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
@@ -533,12 +550,12 @@ impl Cpu {
             .set_flag(registers::registers::Flag::Carry, (self.temp & 0xFF00) > 0);
 
         // Set the Zero and Negative flags
-        self.registers
-            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
-            (self.temp & 0x80) > 0,
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x00,
         );
+        self.registers
+            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
 
         // If we are in implied mode, store the temp variable in the accumulator
         if self.addr_mode == AddressingMode::Implied {
@@ -551,12 +568,20 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn bcc(&mut self) -> u8 {
         return 0;
     }
+
     pub fn bcs(&mut self) -> u8 {
         return 0;
     }
+
+    /// Branches to the address specified by the relative offset if the zero flag is set.
+    ///
+    /// # Returns
+    ///
+    /// The number of cycles the operation took.
     pub fn beq(&mut self) -> u8 {
         // If the zero flag is 1, branch
         if self.registers.get_flag(registers::registers::Flag::Zero) {
@@ -578,12 +603,20 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn bit(&mut self) -> u8 {
         return 0;
     }
+
     pub fn bmi(&mut self) -> u8 {
         return 0;
     }
+
+    /// Branches to the address specified by the relative offset if the zero flag is not set.
+    ///
+    /// # Returns
+    ///
+    /// The number of cycles the operation took.
     pub fn bne(&mut self) -> u8 {
         // If the zero flag is 0, branch
         if self.registers.get_flag(registers::registers::Flag::Zero) == false {
@@ -605,9 +638,13 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn bpl(&mut self) -> u8 {
         return 0;
     }
+
+    /// Break instruction, which generates an interrupt request and pushes the program counter
+    /// and status register to the stack. Returns the number of cycles taken.
     pub fn brk(&mut self) -> u8 {
         // Increment the program counter
         self.registers.pc += 1;
@@ -636,12 +673,18 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn bvc(&mut self) -> u8 {
         return 0;
     }
+
+    /// Branch if overflow flag is set
     pub fn bvs(&mut self) -> u8 {
         // If the overflow flag is 1, branch
-        if self.registers.get_flag(registers::registers::Flag::Overflow) {
+        if self
+            .registers
+            .get_flag(registers::registers::Flag::Overflow)
+        {
             // We branched, so add a cycle
             self.cycles += 1;
 
@@ -660,6 +703,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Clear the carry flag
     pub fn clc(&mut self) -> u8 {
         // Set the carry flag to 0
         self.registers
@@ -668,45 +713,63 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn cld(&mut self) -> u8 {
         return 0;
     }
+
     pub fn cli(&mut self) -> u8 {
         return 0;
     }
+
     pub fn clv(&mut self) -> u8 {
         return 0;
     }
+
     pub fn cmp(&mut self) -> u8 {
         return 0;
     }
+
     pub fn cpx(&mut self) -> u8 {
         return 0;
     }
+
     pub fn cpy(&mut self) -> u8 {
         return 0;
     }
+
     pub fn dec(&mut self) -> u8 {
         return 0;
     }
+
     pub fn dex(&mut self) -> u8 {
         return 0;
     }
+
     pub fn dey(&mut self) -> u8 {
         return 0;
     }
+
     pub fn eor(&mut self) -> u8 {
         return 0;
     }
     pub fn inc(&mut self) -> u8 {
         return 0;
     }
+
     pub fn inx(&mut self) -> u8 {
         return 0;
     }
+
     pub fn iny(&mut self) -> u8 {
         return 0;
     }
+
+    /// Jumps to the address specified by the program counter.
+    ///
+    /// # Returns
+    ///
+    /// The number of cycles it took to execute the instruction.
     pub fn jmp(&mut self) -> u8 {
         // Set the program counter to the absolute address
         self.registers.pc = self.addr_abs;
@@ -714,6 +777,9 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// The JSR instruction pushes the address (minus one) of the return
+    /// point on to the stack and then sets the program counter to the target memory address.
     pub fn jsr(&mut self) -> u8 {
         // Push the program counter to the stack
         self.push_word(self.registers.pc - 1);
@@ -724,6 +790,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Loads the accumulator with a value from memory.
     pub fn lda(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
@@ -742,6 +810,8 @@ impl Cpu {
         // Return the number of cycles required
         return 1;
     }
+
+    /// Load the X register with a byte of memory.
     pub fn ldx(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
@@ -760,6 +830,8 @@ impl Cpu {
         // Return the number of cycles required
         return 1;
     }
+
+    /// Loads the Y register with an 8-bit value from memory.
     pub fn ldy(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
@@ -778,15 +850,20 @@ impl Cpu {
         // Return the number of cycles required
         return 1;
     }
+
     pub fn lsr(&mut self) -> u8 {
         return 0;
     }
+
     pub fn nop(&mut self) -> u8 {
         return 0;
     }
+
     pub fn ora(&mut self) -> u8 {
         return 0;
     }
+
+    /// Push the accumulator onto the stack
     pub fn pha(&mut self) -> u8 {
         // Push the accumulator to the stack
         self.push(self.registers.a);
@@ -794,6 +871,22 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Push Processor Status
+    ///
+    /// Pushes a copy of the status flags on to the stack.
+    ///
+    /// Flags: N V - B D I Z C
+    ///
+    /// The flags are pushed onto the stack in this order:
+    ///
+    ///     1. Break flag is set to 1
+    ///     2. Unused flag is set to 1
+    ///     3. Interrupt flag
+    ///     4. Zero flag
+    ///     5. Negative flag
+    ///
+    /// The processor status register is not affected by this operation.
     pub fn php(&mut self) -> u8 {
         // Push the flags to the stack
         self.push(self.registers.flags);
@@ -809,6 +902,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Pulls a byte from the stack and loads it into the accumulator.
     pub fn pla(&mut self) -> u8 {
         // Pop the next byte from the stack into the accumulator
         self.registers.a = self.pop();
@@ -824,6 +919,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Pull Processor Status from stack
     pub fn plp(&mut self) -> u8 {
         // Pop the status flags from the stack
         self.registers.flags = self.pop();
@@ -835,9 +932,16 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn rol(&mut self) -> u8 {
         return 0;
     }
+
+    /// Rotate the accumulator right by one bit, with the carry flag replacing the bit that is shifted out.
+    /// Returns the new value of the accumulator.
+    ///
+    /// This function calls the NMOS ROR instruction if the CPU variant is NMOS,
+    /// otherwise it calls the CMOS ROR instruction.
     pub fn ror_a(&mut self) -> u8 {
         // If the variant is NMOS, use the NMOS ROR instruction,
         // otherwise use the CMOS ROR instruction
@@ -847,6 +951,16 @@ impl Cpu {
             return self.ror_a_cmos();
         }
     }
+
+    /// Rotate one bit right in memory, then shift right the entire byte.
+    ///
+    /// Flags affected:
+    /// - N: Set if the resulting value has bit 7 set.
+    /// - Z: Set if the resulting value is 0.
+    /// - C: The carry flag is set to the value of the bit that was shifted out.
+    ///
+    /// This function calls the NMOS ROR instruction if the CPU variant is NMOS,
+    /// otherwise it calls the CMOS ROR instruction.
     pub fn ror(&mut self) -> u8 {
         // If the variant is NMOS, use the NMOS ROR instruction,
         // otherwise use the CMOS ROR instruction
@@ -856,6 +970,11 @@ impl Cpu {
             return self.ror_cmos();
         }
     }
+
+    /// Rotate the accumulator right by one bit, with the bit that was shifted out
+    /// being shifted into the carry flag.
+    ///
+    /// This is the NMOS version of the ROR instruction, so it's actually a LSR instruction.
     fn ror_a_nmos(&mut self) -> u8 {
         // Load the accumulator into the temporary variable
         self.temp = self.registers.a as u16;
@@ -888,6 +1007,11 @@ impl Cpu {
         // Return the number of extra cycles required
         return 0;
     }
+
+    /// Rotate the accumulator right by one bit, with the bit that was shifted
+    /// out being shifted into the carry flag.
+    ///
+    /// This is the CMOS version of the ROR instruction.
     fn ror_a_cmos(&mut self) -> u8 {
         // Load the accumulator into the temporary variable
         self.temp = self.registers.a as u16;
@@ -921,6 +1045,8 @@ impl Cpu {
         // Return the number of extra cycles required
         return 0;
     }
+
+    /// Rotate right (memory) with carry, using the NMOS 6502 processor's logic.
     fn ror_nmos(&mut self) -> u8 {
         // Load the next byte from memory into the temporary variable
         self.temp = self.fetch() as u16;
@@ -948,6 +1074,11 @@ impl Cpu {
         // Return the number of extra cycles required
         return 0;
     }
+
+    /// Rotate the bits of the accumulator right by one bit, with the bit that was shifted
+    /// out being shifted into the carry flag.
+    ///
+    /// This is the CMOS version of the ROR instruction.
     fn ror_cmos(&mut self) -> u8 {
         // Load the next byte from memory into the temporary variable
         self.temp = self.fetch() as u16;
@@ -981,6 +1112,15 @@ impl Cpu {
         // Return the number of extra cycles required
         return 0;
     }
+
+    /// Return from Interrupt
+    ///
+    /// Pulls an 8-bit value from the stack and into the program counter (low byte),
+    /// then another 8-bit value and into the program counter (high byte).
+    ///
+    /// # Returns
+    ///
+    /// The number of cycles this operation took.
     pub fn rti(&mut self) -> u8 {
         // Pop the status flags from the stack
         self.registers.flags = self.pop();
@@ -996,6 +1136,11 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Return from Subroutine
+    ///
+    /// Pulls the program counter (PC) from the stack and sets it to the address of the
+    /// instruction that follows the subroutine call.
     pub fn rts(&mut self) -> u8 {
         // Pop the program counter from the stack and increment it
         self.registers.pc = self.pop_word() + 1;
@@ -1003,18 +1148,24 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
     pub fn sbc(&mut self) -> u8 {
         return 0;
     }
+
     pub fn sec(&mut self) -> u8 {
         return 0;
     }
+
     pub fn sed(&mut self) -> u8 {
         return 0;
     }
+
     pub fn sei(&mut self) -> u8 {
         return 0;
     }
+
+    /// Stores the accumulator register value into memory at the specified address.
     pub fn sta(&mut self) -> u8 {
         // Store the accumulator in memory
         self.write(self.addr_abs, self.registers.a);
@@ -1022,6 +1173,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Stores the value of the X register into memory.
     pub fn stx(&mut self) -> u8 {
         // Store the X register in memory
         self.write(self.addr_abs, self.registers.x);
@@ -1029,6 +1182,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Stores the value of the X register into memory.
     pub fn sty(&mut self) -> u8 {
         // Store the Y register in memory
         self.write(self.addr_abs, self.registers.y);
@@ -1036,6 +1191,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Transfers the accumulator to the X register.
     pub fn tax(&mut self) -> u8 {
         // Load the accumulator into the X register
         self.registers.x = self.registers.a;
@@ -1051,6 +1208,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Transfers the accumulator to the Y register.
     pub fn tay(&mut self) -> u8 {
         // Load the accumulator into the Y register
         self.registers.y = self.registers.a;
@@ -1066,6 +1225,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Transfers the stack pointer to the X register.
     pub fn tsx(&mut self) -> u8 {
         // Load the stack pointer into the X register
         self.registers.x = self.registers.sp;
@@ -1081,6 +1242,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Transfers the X register to the accumulator.
     pub fn txa(&mut self) -> u8 {
         // Load the X register into the accumulator
         self.registers.a = self.registers.x;
@@ -1096,6 +1259,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Transfers the X register to the stack pointer.
     pub fn txs(&mut self) -> u8 {
         // Load the X register into the stack pointer
         self.registers.sp = self.registers.x;
@@ -1103,6 +1268,8 @@ impl Cpu {
         // Return the number of cycles required
         return 0;
     }
+
+    /// Transfers the Y register to the accumulator.
     pub fn tya(&mut self) -> u8 {
         // Load the Y register into the accumulator
         self.registers.a = self.registers.y;
