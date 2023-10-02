@@ -238,23 +238,11 @@ impl Cpu {
         if self.cycles == 0 {
             // Set state to fetching
             self.state = State::Fetching;
+
+            // Set the current instruction string
             self.current_instruction_string = self.disassemble_instruction_at(self.registers.pc);
-            if self.debug {
-                let reg_status = self.registers.get_status_string();
-                // Print the instruction and the registers
-                println!(
-                    "{:04X}  {:<32} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} {} {:02X}",
-                    self.registers.pc,
-                    self.current_instruction_string,
-                    self.registers.a,
-                    self.registers.x,
-                    self.registers.y,
-                    self.registers.flags,
-                    self.registers.sp,
-                    reg_status,
-                    self.opcode
-                );
-            }
+
+            // Fetch the next opcode
             self.opcode = self.read(self.registers.pc);
             self.registers.pc += 1;
 
@@ -275,6 +263,23 @@ impl Cpu {
 
             // Add the number of cycles required for the addressing mode and the instruction
             self.cycles += cycles_addr + cycles_insn;
+
+            if self.debug {
+                let reg_status = self.registers.get_status_string();
+                // Print the instruction and the registers
+                println!(
+                    "{:04X}  {:<32} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} {} {:02X}",
+                    self.registers.pc,
+                    self.current_instruction_string,
+                    self.registers.a,
+                    self.registers.x,
+                    self.registers.y,
+                    self.registers.flags,
+                    self.registers.sp,
+                    reg_status,
+                    self.opcode
+                );
+            }
         }
 
         // Decrement the number of cycles remaining
