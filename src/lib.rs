@@ -22,8 +22,8 @@ use crate::{
 
 /// The CPU struct
 pub struct Cpu {
-    variant: Variant,     // CPU variant
-    state: State,         // CPU state
+    variant: Variant, // CPU variant
+    state: State,     // CPU state
 
     /// CPU registers
     pub registers: Registers,
@@ -31,19 +31,19 @@ pub struct Cpu {
     /// CPU bus
     pub bus: Box<dyn Bus>, // Bus
 
-    cycles: u8,    // Number of cycles remaining for current instruction
-    temp: u16,     // Temporary storage for various operations
-    addr_abs: u16, // Absolute address
-    addr_rel: u16, // Relative address
+    cycles: u8,                // Number of cycles remaining for current instruction
+    temp: u16,                 // Temporary storage for various operations
+    addr_abs: u16,             // Absolute address
+    addr_rel: u16,             // Relative address
     addr_mode: AddressingMode, // Addressing mode
-    opcode: u8,    // Current opcode
-    fetched: u8,   // Fetched data
+    opcode: u8,                // Current opcode
+    fetched: u8,               // Fetched data
 
     enable_illegal_opcodes: bool, // Enable illegal opcodes
 
     /// Current disassembled instruction string
     pub current_instruction_string: String,
-    
+
     debug: bool, // Debug mode
 }
 
@@ -503,7 +503,9 @@ impl Cpu {
         self.fetch();
 
         // Perform the addition
-        self.temp = self.registers.a as u16 + self.fetched as u16 + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
+        self.temp = self.registers.a as u16
+            + self.fetched as u16
+            + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
 
         // Set the zero flag if the result is 0
         self.registers
@@ -512,10 +514,16 @@ impl Cpu {
         // if the CPU variant is NOT NES, check for decimal flag
         if self.variant != Variant::NES {
             // If the decimal flag is set, perform BCD addition
-            if self.registers.get_flag(registers::registers::Flag::DecimalMode) {
-
+            if self
+                .registers
+                .get_flag(registers::registers::Flag::DecimalMode)
+            {
                 // If the result is greater than 99, add 96 to it
-                if (self.registers.a & 0xF) + (self.fetched & 0xF) + (self.registers.get_flag(registers::registers::Flag::Carry) as u8) > 9 {
+                if (self.registers.a & 0xF)
+                    + (self.fetched & 0xF)
+                    + (self.registers.get_flag(registers::registers::Flag::Carry) as u8)
+                    > 9
+                {
                     self.temp += 6;
                 }
 
@@ -621,11 +629,47 @@ impl Cpu {
         return 0;
     }
 
+    /// Branches to the address specified by the relative offset if the carry flag is clear.
     fn bcc(&mut self) -> u8 {
+        // If the carry flag is 0, branch
+        if self.registers.get_flag(registers::registers::Flag::Carry) == false {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
         return 0;
     }
 
+    /// Branches to the address specified by the relative offset if the carry flag is set.
     fn bcs(&mut self) -> u8 {
+        // If the carry flag is 1, branch
+        if self.registers.get_flag(registers::registers::Flag::Carry) {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
         return 0;
     }
 
@@ -656,11 +700,63 @@ impl Cpu {
         return 0;
     }
 
+    /// Test bits in memory with the accumulator.
+    /// 
+    /// # Returns
+    /// 
+    /// The number of cycles required.
+    /// 
+    /// # Flags
+    /// 
+    /// The negative flag is set to the seventh bit of the fetched value.
+    /// The overflow flag is set to the sixth bit of the fetched value.
+    /// The zero flag is set to the result of the AND operation between the fetched value and the accumulator.
     fn bit(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the AND operation
+        self.temp = self.registers.a as u16 & self.fetched as u16;
+
+        // Set the negative flag to the seventh bit of the fetched value
+        self.registers
+            .set_flag(registers::registers::Flag::Negative, (self.fetched & 0x80) > 0);
+
+        // Set the overflow flag to the sixth bit of the fetched value
+        self.registers
+            .set_flag(registers::registers::Flag::Overflow, (self.fetched & 0x40) > 0);
+
+        // Set the Zero flag to the result of the AND operation
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.temp == 0x00);
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Branches to the address specified by the relative offset if the negative flag is set.
     fn bmi(&mut self) -> u8 {
+        // If the negative flag is 1, branch
+        if self
+            .registers
+            .get_flag(registers::registers::Flag::Negative)
+        {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -691,7 +787,30 @@ impl Cpu {
         return 0;
     }
 
+    /// Branches to the address specified by the relative offset if the negative flag is not set.
     fn bpl(&mut self) -> u8 {
+        // If the negative flag is 0, branch
+        if self
+            .registers
+            .get_flag(registers::registers::Flag::Negative)
+            == false
+        {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -726,7 +845,30 @@ impl Cpu {
         return 0;
     }
 
+    /// Branch if overflow flag is clear
     fn bvc(&mut self) -> u8 {
+        // If the overflow flag is 0, branch
+        if self
+            .registers
+            .get_flag(registers::registers::Flag::Overflow)
+            == false
+        {
+            // We branched, so add a cycle
+            self.cycles += 1;
+
+            // Calculate the absolute address
+            self.addr_abs = self.registers.pc + self.addr_rel;
+
+            // If the page changed, add another cycle
+            if (self.addr_abs & 0xFF00) != (self.registers.pc & 0xFF00) {
+                self.cycles += 1;
+            }
+
+            // Set the program counter to the absolute address
+            self.registers.pc = self.addr_abs;
+        }
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -794,12 +936,16 @@ impl Cpu {
         self.temp = self.temp.wrapping_sub(self.fetched as u16);
 
         // Set the carry flag if the accumulator is greater than or equal to the fetched value
-        self.registers
-            .set_flag(registers::registers::Flag::Carry, self.registers.a >= self.fetched);
+        self.registers.set_flag(
+            registers::registers::Flag::Carry,
+            self.registers.a >= self.fetched,
+        );
 
         // Set the Zero and Negative flags
-        self.registers
-            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0x0000);
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
         self.registers.set_flag(
             registers::registers::Flag::Negative,
             (self.temp & 0x0080) > 0,
@@ -832,7 +978,7 @@ impl Cpu {
     fn eor(&mut self) -> u8 {
         return 0;
     }
-    
+
     fn inc(&mut self) -> u8 {
         return 0;
     }
@@ -1247,20 +1393,27 @@ impl Cpu {
         // If the CPU variant is NOT NES
         if self.variant != Variant::NES {
             // If the decimal flag is set, perform BCD subtraction
-            if self.registers.get_flag(registers::registers::Flag::DecimalMode) {
+            if self
+                .registers
+                .get_flag(registers::registers::Flag::DecimalMode)
+            {
                 // Adjust the result for BCD
                 if (self.temp & 0x000F) > 0x0009 {
                     self.temp -= 0x0006;
                 }
 
                 // Set the negative flag if the result is negative
-                self.registers
-                    .set_flag(registers::registers::Flag::Negative, (self.temp & 0x0080) > 0);
+                self.registers.set_flag(
+                    registers::registers::Flag::Negative,
+                    (self.temp & 0x0080) > 0,
+                );
 
                 // Set the overflow flag if the result is greater than 127 or less than -128
                 self.registers.set_flag(
                     registers::registers::Flag::Overflow,
-                    ((self.registers.a ^ self.temp as u8) & (self.fetched ^ self.temp as u8) & 0x80)
+                    ((self.registers.a ^ self.temp as u8)
+                        & (self.fetched ^ self.temp as u8)
+                        & 0x80)
                         > 0,
                 );
 
