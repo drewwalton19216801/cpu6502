@@ -1,17 +1,18 @@
+//! # Device
+//! 
+//! This module contains the Device trait, which is used to represent a device on the bus.
+
+/// Represents a device on the bus.
 pub trait Device {
-    // Start address of the device
+    /// Start address of the device
     fn start_address(&self) -> u16;
 
-    // End address of the device
+    /// End address of the device
     fn end_address(&self) -> u16;
 
-    /**
-     * Set the address and data lines
-     * 
-     * @param address The address to set
-     * @param data The data to set
-     * @remarks This must be called prior to reading or writing from/to the device.
-     */
+    /// Set the address and data lines
+    /// 
+    /// 
     fn set_address_data(&mut self, address: u16, data: u8);
 
     /**
@@ -51,6 +52,11 @@ pub trait Device {
     fn write(&mut self, force_write: bool);
 }
 
+/// A collection of devices on the bus.
+/// 
+/// # Remarks
+/// 
+/// This is a convenience struct that allows you to add multiple devices to the bus at once.
 #[allow(dead_code)]
 pub struct Devices {
     devices: Vec<Box<dyn Device>>,

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! A 6502 emulator library written in Rust.
 //!
 //! Aims to provide a simple, easy-to-use interface for emulating the 6502 CPU.
@@ -19,35 +20,47 @@ use crate::{
     registers::registers::Registers,
 };
 
+/// The CPU struct
 pub struct Cpu {
-    pub variant: Variant,     // CPU variant
-    pub state: State,         // CPU state
-    pub registers: Registers, // Registers
+    variant: Variant,     // CPU variant
+    state: State,         // CPU state
 
+    /// CPU registers
+    pub registers: Registers,
+
+    /// CPU bus
     pub bus: Box<dyn Bus>, // Bus
 
-    pub cycles: u8,    // Number of cycles remaining for current instruction
-    pub temp: u16,     // Temporary storage for various operations
-    pub addr_abs: u16, // Absolute address
-    pub addr_rel: u16, // Relative address
-    pub addr_mode: AddressingMode, // Addressing mode
-    pub opcode: u8,    // Current opcode
-    pub fetched: u8,   // Fetched data
+    cycles: u8,    // Number of cycles remaining for current instruction
+    temp: u16,     // Temporary storage for various operations
+    addr_abs: u16, // Absolute address
+    addr_rel: u16, // Relative address
+    addr_mode: AddressingMode, // Addressing mode
+    opcode: u8,    // Current opcode
+    fetched: u8,   // Fetched data
 
-    pub enable_illegal_opcodes: bool, // Enable illegal opcodes
+    enable_illegal_opcodes: bool, // Enable illegal opcodes
 
-    pub current_instruction_string: String, // Current instruction string
-    pub debug: bool,                        // Print debug information?
+    /// Current disassembled instruction string
+    pub current_instruction_string: String,
+    
+    debug: bool, // Debug mode
 }
 
+/// CPU variants
 #[derive(Clone, Copy, PartialEq)]
 pub enum Variant {
-    NMOS, // Original 6502 (with ROR bug)
-    CMOS, // Modified 65C02 (no ROR bug)
-    NES,  // Modified 2A03 (no decimal mode)
+    /// Modified 65C02 (no ROR bug)
+    CMOS,
+    /// Modified 2A03 (no decimal mode)
+    NES,
+    /// Original 6502 (with ROR bug)
+    NMOS,
 }
 
+/// Variant implementation
 impl Variant {
+    /// Returns a new Variant from a string
     pub fn from_string(variant: String) -> Self {
         match variant.as_str() {
             "NMOS" => return Self::NMOS,
@@ -57,6 +70,7 @@ impl Variant {
         }
     }
 
+    /// Returns a string representation of the variant
     pub fn to_string(&self) -> String {
         match self {
             Self::NMOS => return String::from("NMOS"),
@@ -66,19 +80,23 @@ impl Variant {
     }
 }
 
+/// CPU states
 pub enum State {
-    Stopped,       // CPU is stopped
-    Fetching,      // CPU is fetching an instruction
-    Executing,     // CPU is executing an instruction
-    Interrupt,     // CPU is handling an interrupt
-    IllegalOpcode, // CPU encountered an illegal opcode
+    /// CPU is stopped
+    Stopped,
+    /// CPU is fetching an instruction
+    Fetching,
+    /// CPU is executing an instruction
+    Executing,
+    /// CPU is handling an interrupt
+    Interrupt,
+    /// CPU encountered an illegal opcode
+    IllegalOpcode,
 }
 
+/// CPU implementation
 impl Cpu {
-    pub fn default(debug: bool) -> Self {
-        Self::new(Box::new(bus::DefaultBus::default()), debug)
-    }
-
+    /// Returns a new CPU with the specified bus
     pub fn new(bus: Box<dyn Bus>, debug: bool) -> Self {
         Self {
             registers: Registers::new(),
@@ -102,18 +120,17 @@ impl Cpu {
         }
     }
 
-    pub fn dump_cycles(&self) {
-        println!("Cycles remaining: {}", self.cycles);
-    }
-
+    /// Changes the CPU variant
     pub fn change_variant(&mut self, variant: Variant) {
         self.variant = variant;
     }
 
+    /// Enables or disables illegal opcodes
     pub fn set_illegal_opcodes(&mut self, enable: bool) {
         self.enable_illegal_opcodes = enable;
     }
 
+    /// Resets the CPU
     pub fn reset(&mut self) {
         // Reset registers to initial state
         self.registers.a = 0x00;
@@ -126,21 +143,25 @@ impl Cpu {
         self.cycles = 8;
     }
 
+    /// Reads a byte from the specified address
     pub fn read(&mut self, address: u16) -> u8 {
         let data = self.bus.read(address);
         return data;
     }
 
+    /// Reads a word from the specified address
     pub fn read_word(&mut self, address: u16) -> u16 {
         let lo = self.read(address) as u16;
         let hi = self.read(address + 1) as u16;
         return (hi << 8) | lo;
     }
 
+    /// Writes a byte to the specified address
     pub fn write(&mut self, address: u16, data: u8) {
         self.bus.write(address, data);
     }
 
+    /// Writes a word to the specified address
     pub fn write_word(&mut self, address: u16, data: u16) {
         let lo = (data & 0x00FF) as u8;
         let hi = ((data & 0xFF00) >> 8) as u8;
@@ -148,6 +169,7 @@ impl Cpu {
         self.write(address + 1, hi);
     }
 
+    /// Fetches the next byte from memory
     pub fn fetch(&mut self) -> u8 {
         // Set state to Fetching
         self.state = State::Fetching;
@@ -158,24 +180,28 @@ impl Cpu {
         return self.fetched;
     }
 
+    /// Pushes a byte to the stack
     pub fn push(&mut self, data: u8) {
         // Push data to the stack
         self.write(0x0100 + self.registers.sp as u16, data);
         self.registers.decrement_sp();
     }
 
+    /// Pushes a word to the stack
     pub fn push_word(&mut self, data: u16) {
         // Push data to the stack
         self.push(((data & 0xFF00) >> 8) as u8);
         self.push((data & 0x00FF) as u8);
     }
 
+    /// Pops a byte from the stack
     pub fn pop(&mut self) -> u8 {
         // Pop data from the stack
         self.registers.increment_sp();
         return self.read(0x0100 + self.registers.sp as u16);
     }
 
+    /// Pops a word from the stack
     pub fn pop_word(&mut self) -> u16 {
         // Pop data from the stack
         let lo = self.pop() as u16;
@@ -183,48 +209,31 @@ impl Cpu {
         return (hi << 8) | lo;
     }
 
+    /// Executes an instruction
     pub fn execute_instruction(&mut self, opcode: u8) -> u8 {
         let instruction = &INSTRUCTION_LIST[opcode as usize];
         (instruction.function)(self)
     }
 
+    /// Returns a string representation of the operand
     pub fn get_operand_string(&mut self, mode: AddressingMode, address: u16) -> String {
         match mode {
             AddressingMode::Implied => return String::from(""),
-            AddressingMode::Immediate => {
-                // Get the value at the address
-                let value = self.read(address);
-                // Return the value as decimal
-                return format!("#${:02X}", value);
-            }
-            AddressingMode::ZeroPage => return format!("${:02X}", address),
-            AddressingMode::ZeroPageX => return format!("${:02X},X", address),
-            AddressingMode::ZeroPageY => return format!("${:02X},Y", address),
-            AddressingMode::Relative => return format!("${:02X}", address),
-            AddressingMode::Absolute => {
-                // Get the value at the address
-                let value = self.read_word(address);
-                // Return the value as decimal
-                return format!("${:04X}", value);
-            }
-            AddressingMode::AbsoluteX => {
-                // Get the value at the address
-                let value = self.read_word(address);
-                // Return the value as decimal
-                return format!("${:04X},X", value);
-            }
-            AddressingMode::AbsoluteY => {
-                // Get the value at the address
-                let value = self.read_word(address);
-                // Return the value as decimal
-                return format!("${:04X},Y", value);
-            }
-            AddressingMode::Indirect => return format!("(${:04X})", address),
-            AddressingMode::IndexedIndirect => return format!("(${:02X},X)", address),
-            AddressingMode::IndirectIndexed => return format!("(${:02X}),Y", address),
+            AddressingMode::Immediate => return format!("#${:02X}", self.read(address)),
+            AddressingMode::ZeroPage => return format!("${:02X}", self.read(address)),
+            AddressingMode::ZeroPageX => return format!("${:02X},X", self.read(address)),
+            AddressingMode::ZeroPageY => return format!("${:02X},Y", self.read(address)),
+            AddressingMode::Relative => return format!("${:02X}", self.read(address)),
+            AddressingMode::Absolute => return format!("${:04X}", self.read_word(address)),
+            AddressingMode::AbsoluteX => return format!("${:04X},X", self.read_word(address)),
+            AddressingMode::AbsoluteY => return format!("${:04X},Y", self.read_word(address)),
+            AddressingMode::Indirect => return format!("(${:04X})", self.read_word(address)),
+            AddressingMode::IndexedIndirect => return format!("(${:02X},X)", self.read(address)),
+            AddressingMode::IndirectIndexed => return format!("(${:02X}),Y", self.read(address)),
         }
     }
 
+    /// Disassembles the instruction at the specified address
     pub fn disassemble_instruction_at(&mut self, from_pc: u16) -> String {
         let opcode = self.read(from_pc);
         let instruction = &INSTRUCTION_LIST[opcode as usize];
@@ -233,6 +242,7 @@ impl Cpu {
         return format!("{} {}", instruction.name, addr_str);
     }
 
+    /// Executes a single clock cycle
     pub fn clock(&mut self) {
         // If we have no cycles remaining, fetch the next opcode
         if self.cycles == 0 {
@@ -286,6 +296,7 @@ impl Cpu {
         self.cycles -= 1;
     }
 
+    /// Executes the addressing mode function for the current instruction
     pub fn execute_addr_mode(&mut self, mode: AddressingMode) -> u8 {
         // Set the addressing mode
         self.addr_mode = mode;
@@ -307,10 +318,12 @@ impl Cpu {
         }
     }
 
+    /// Returns the number of cycles required for the specified opcode
     pub fn get_cycles(&self, opcode: u8) -> u8 {
         return instructions::get_cycles(opcode);
     }
 
+    /// Interrupt request
     pub fn irq(&mut self) {
         // If interrupts are enabled, push the program counter and flags to the stack
         if self
@@ -346,6 +359,7 @@ impl Cpu {
         }
     }
 
+    /// Non-maskable interrupt
     pub fn nmi(&mut self) {
         // Push the program counter and flags to the stack
         self.push_word(self.registers.pc);
@@ -375,38 +389,36 @@ impl Cpu {
         self.cycles = 7;
     }
 
+    /// Prints the instruction list
     pub fn print_instruction_list(&self) {
         instructions::print_instruction_list();
     }
 
-    /**
-     * Addressing modes <https://wiki.nesdev.com/w/index.php/CPU_addressing_modes>
-     */
-    pub fn addr_implied(&mut self) -> u8 {
+    fn addr_implied(&mut self) -> u8 {
         self.fetched = self.registers.a;
         return 0;
     }
-    pub fn addr_immediate(&mut self) -> u8 {
+    fn addr_immediate(&mut self) -> u8 {
         self.addr_abs = self.registers.pc;
         self.registers.pc += 1;
         return 0;
     }
-    pub fn addr_zero_page(&mut self) -> u8 {
+    fn addr_zero_page(&mut self) -> u8 {
         self.addr_abs = (self.read(self.registers.pc) as u16) & 0x00FF;
         self.registers.pc += 1;
         return 0;
     }
-    pub fn addr_zero_page_x(&mut self) -> u8 {
+    fn addr_zero_page_x(&mut self) -> u8 {
         self.addr_abs = ((self.read(self.registers.pc) as u16) + self.registers.x as u16) & 0x00FF;
         self.registers.pc += 1;
         return 0;
     }
-    pub fn addr_zero_page_y(&mut self) -> u8 {
+    fn addr_zero_page_y(&mut self) -> u8 {
         self.addr_abs = ((self.read(self.registers.pc) as u16) + self.registers.y as u16) & 0x00FF;
         self.registers.pc += 1;
         return 0;
     }
-    pub fn addr_relative(&mut self) -> u8 {
+    fn addr_relative(&mut self) -> u8 {
         self.addr_rel = self.read(self.registers.pc) as u16;
         self.registers.pc += 1;
         if self.addr_rel & 0x80 != 0 {
@@ -414,14 +426,14 @@ impl Cpu {
         }
         return 0;
     }
-    pub fn addr_absolute(&mut self) -> u8 {
+    fn addr_absolute(&mut self) -> u8 {
         let lo = self.read(self.registers.pc) as u16;
         let hi = self.read(self.registers.pc + 1) as u16;
         self.addr_abs = (hi << 8) | lo;
         self.registers.pc += 2;
         return 0;
     }
-    pub fn addr_absolute_x(&mut self) -> u8 {
+    fn addr_absolute_x(&mut self) -> u8 {
         let lo = self.read(self.registers.pc) as u16;
         let hi = self.read(self.registers.pc + 1) as u16;
         self.addr_abs = ((hi << 8) | lo) + self.registers.x as u16;
@@ -433,7 +445,7 @@ impl Cpu {
         }
         return 0;
     }
-    pub fn addr_absolute_y(&mut self) -> u8 {
+    fn addr_absolute_y(&mut self) -> u8 {
         let lo = self.read(self.registers.pc) as u16;
         let hi = self.read(self.registers.pc + 1) as u16;
         self.addr_abs = ((hi << 8) | lo) + self.registers.y as u16;
@@ -445,7 +457,7 @@ impl Cpu {
         }
         return 0;
     }
-    pub fn addr_indirect(&mut self) -> u8 {
+    fn addr_indirect(&mut self) -> u8 {
         let ptr_lo = self.read(self.registers.pc) as u16;
         let ptr_hi = self.read(self.registers.pc + 1) as u16;
         let ptr = (ptr_hi << 8) | ptr_lo;
@@ -460,7 +472,7 @@ impl Cpu {
         self.registers.pc += 2;
         return 0;
     }
-    pub fn addr_indexed_indirect(&mut self) -> u8 {
+    fn addr_indexed_indirect(&mut self) -> u8 {
         let t = self.read(self.registers.pc) as u16;
         let lo = self.read((t + self.registers.x as u16) & 0x00FF) as u16;
         let hi = self.read((t + self.registers.x as u16 + 1) & 0x00FF) as u16;
@@ -468,7 +480,7 @@ impl Cpu {
         self.registers.pc += 1;
         return 0;
     }
-    pub fn addr_indirect_indexed(&mut self) -> u8 {
+    fn addr_indirect_indexed(&mut self) -> u8 {
         let t = self.read(self.registers.pc) as u16;
         let lo = self.read(t & 0x00FF) as u16;
         let hi = self.read((t + 1) & 0x00FF) as u16;
@@ -482,13 +494,9 @@ impl Cpu {
         return 0;
     }
 
-    /**
-     * CPU instructions
-     */
-
     /// Adds the value of the accumulator and the carry flag to a memory value, and sets the
     /// accumulator to the result. Decimal mode is supported on the original NMOS 6502 and the 65C02.
-    pub fn adc(&mut self) -> u8 {
+    fn adc(&mut self) -> u8 {
         let mut extra_cycle: u8 = 0;
 
         // Fetch the next byte from memory
@@ -560,7 +568,7 @@ impl Cpu {
 
     /// Performs a bitwise AND operation between the accumulator and a value in memory,
     /// and stores the result in the accumulator.
-    pub fn and(&mut self) -> u8 {
+    fn and(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
 
@@ -581,7 +589,7 @@ impl Cpu {
 
     /// Shifts the accumulator left by one bit, setting the carry flag if the most significant bit is set.
     /// Returns the new value of the accumulator.
-    pub fn asl(&mut self) -> u8 {
+    fn asl(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
 
@@ -613,11 +621,11 @@ impl Cpu {
         return 0;
     }
 
-    pub fn bcc(&mut self) -> u8 {
+    fn bcc(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn bcs(&mut self) -> u8 {
+    fn bcs(&mut self) -> u8 {
         return 0;
     }
 
@@ -626,7 +634,7 @@ impl Cpu {
     /// # Returns
     ///
     /// The number of cycles the operation took.
-    pub fn beq(&mut self) -> u8 {
+    fn beq(&mut self) -> u8 {
         // If the zero flag is 1, branch
         if self.registers.get_flag(registers::registers::Flag::Zero) {
             // We branched, so add a cycle
@@ -648,11 +656,11 @@ impl Cpu {
         return 0;
     }
 
-    pub fn bit(&mut self) -> u8 {
+    fn bit(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn bmi(&mut self) -> u8 {
+    fn bmi(&mut self) -> u8 {
         return 0;
     }
 
@@ -661,7 +669,7 @@ impl Cpu {
     /// # Returns
     ///
     /// The number of cycles the operation took.
-    pub fn bne(&mut self) -> u8 {
+    fn bne(&mut self) -> u8 {
         // If the zero flag is 0, branch
         if self.registers.get_flag(registers::registers::Flag::Zero) == false {
             // We branched, so add a cycle
@@ -683,13 +691,13 @@ impl Cpu {
         return 0;
     }
 
-    pub fn bpl(&mut self) -> u8 {
+    fn bpl(&mut self) -> u8 {
         return 0;
     }
 
     /// Break instruction, which generates an interrupt request and pushes the program counter
     /// and status register to the stack. Returns the number of cycles taken.
-    pub fn brk(&mut self) -> u8 {
+    fn brk(&mut self) -> u8 {
         // Increment the program counter
         self.registers.pc += 1;
 
@@ -718,12 +726,12 @@ impl Cpu {
         return 0;
     }
 
-    pub fn bvc(&mut self) -> u8 {
+    fn bvc(&mut self) -> u8 {
         return 0;
     }
 
     /// Branch if overflow flag is set
-    pub fn bvs(&mut self) -> u8 {
+    fn bvs(&mut self) -> u8 {
         // If the overflow flag is 1, branch
         if self
             .registers
@@ -749,7 +757,7 @@ impl Cpu {
     }
 
     /// Clear the carry flag
-    pub fn clc(&mut self) -> u8 {
+    fn clc(&mut self) -> u8 {
         // Set the carry flag to 0
         self.registers
             .set_flag(registers::registers::Flag::Carry, false);
@@ -759,7 +767,7 @@ impl Cpu {
     }
 
     /// Clear the decimal mode flag
-    pub fn cld(&mut self) -> u8 {
+    fn cld(&mut self) -> u8 {
         // Set the decimal mode flag to 0
         self.registers
             .set_flag(registers::registers::Flag::DecimalMode, false);
@@ -768,16 +776,16 @@ impl Cpu {
         return 0;
     }
 
-    pub fn cli(&mut self) -> u8 {
+    fn cli(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn clv(&mut self) -> u8 {
+    fn clv(&mut self) -> u8 {
         return 0;
     }
 
     /// Compares the accumulator with a value in memory.
-    pub fn cmp(&mut self) -> u8 {
+    fn cmp(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
 
@@ -801,38 +809,39 @@ impl Cpu {
         return 1;
     }
 
-    pub fn cpx(&mut self) -> u8 {
+    fn cpx(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn cpy(&mut self) -> u8 {
+    fn cpy(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn dec(&mut self) -> u8 {
+    fn dec(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn dex(&mut self) -> u8 {
+    fn dex(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn dey(&mut self) -> u8 {
+    fn dey(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn eor(&mut self) -> u8 {
+    fn eor(&mut self) -> u8 {
         return 0;
     }
-    pub fn inc(&mut self) -> u8 {
-        return 0;
-    }
-
-    pub fn inx(&mut self) -> u8 {
+    
+    fn inc(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn iny(&mut self) -> u8 {
+    fn inx(&mut self) -> u8 {
+        return 0;
+    }
+
+    fn iny(&mut self) -> u8 {
         return 0;
     }
 
@@ -841,7 +850,7 @@ impl Cpu {
     /// # Returns
     ///
     /// The number of cycles it took to execute the instruction.
-    pub fn jmp(&mut self) -> u8 {
+    fn jmp(&mut self) -> u8 {
         // Set the program counter to the absolute address
         self.registers.pc = self.addr_abs;
 
@@ -851,7 +860,7 @@ impl Cpu {
 
     /// The JSR instruction pushes the address (minus one) of the return
     /// point on to the stack and then sets the program counter to the target memory address.
-    pub fn jsr(&mut self) -> u8 {
+    fn jsr(&mut self) -> u8 {
         // Push the program counter to the stack
         self.push_word(self.registers.pc - 1);
 
@@ -863,7 +872,7 @@ impl Cpu {
     }
 
     /// Loads the accumulator with a value from memory.
-    pub fn lda(&mut self) -> u8 {
+    fn lda(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
 
@@ -883,7 +892,7 @@ impl Cpu {
     }
 
     /// Load the X register with a byte of memory.
-    pub fn ldx(&mut self) -> u8 {
+    fn ldx(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
 
@@ -903,7 +912,7 @@ impl Cpu {
     }
 
     /// Loads the Y register with an 8-bit value from memory.
-    pub fn ldy(&mut self) -> u8 {
+    fn ldy(&mut self) -> u8 {
         // Fetch the next byte from memory
         self.fetch();
 
@@ -922,20 +931,20 @@ impl Cpu {
         return 1;
     }
 
-    pub fn lsr(&mut self) -> u8 {
+    fn lsr(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn nop(&mut self) -> u8 {
+    fn nop(&mut self) -> u8 {
         return 0;
     }
 
-    pub fn ora(&mut self) -> u8 {
+    fn ora(&mut self) -> u8 {
         return 0;
     }
 
     /// Push the accumulator onto the stack
-    pub fn pha(&mut self) -> u8 {
+    fn pha(&mut self) -> u8 {
         // Push the accumulator to the stack
         self.push(self.registers.a);
 
@@ -958,7 +967,7 @@ impl Cpu {
     ///     5. Negative flag
     ///
     /// The processor status register is not affected by this operation.
-    pub fn php(&mut self) -> u8 {
+    fn php(&mut self) -> u8 {
         // Push the flags to the stack
         self.push(self.registers.flags);
 
@@ -975,7 +984,7 @@ impl Cpu {
     }
 
     /// Pulls a byte from the stack and loads it into the accumulator.
-    pub fn pla(&mut self) -> u8 {
+    fn pla(&mut self) -> u8 {
         // Pop the next byte from the stack into the accumulator
         self.registers.a = self.pop();
 
@@ -992,7 +1001,7 @@ impl Cpu {
     }
 
     /// Pull Processor Status from stack
-    pub fn plp(&mut self) -> u8 {
+    fn plp(&mut self) -> u8 {
         // Pop the status flags from the stack
         self.registers.flags = self.pop();
 
@@ -1004,7 +1013,7 @@ impl Cpu {
         return 0;
     }
 
-    pub fn rol(&mut self) -> u8 {
+    fn rol(&mut self) -> u8 {
         return 0;
     }
 
@@ -1013,7 +1022,7 @@ impl Cpu {
     ///
     /// This function calls the NMOS ROR instruction if the CPU variant is NMOS,
     /// otherwise it calls the CMOS ROR instruction.
-    pub fn ror_a(&mut self) -> u8 {
+    fn ror_a(&mut self) -> u8 {
         // If the variant is NMOS, use the NMOS ROR instruction,
         // otherwise use the CMOS ROR instruction
         if self.variant == Variant::NMOS {
@@ -1032,7 +1041,7 @@ impl Cpu {
     ///
     /// This function calls the NMOS ROR instruction if the CPU variant is NMOS,
     /// otherwise it calls the CMOS ROR instruction.
-    pub fn ror(&mut self) -> u8 {
+    fn ror(&mut self) -> u8 {
         // If the variant is NMOS, use the NMOS ROR instruction,
         // otherwise use the CMOS ROR instruction
         if self.variant == Variant::NMOS {
@@ -1192,7 +1201,7 @@ impl Cpu {
     /// # Returns
     ///
     /// The number of cycles this operation took.
-    pub fn rti(&mut self) -> u8 {
+    fn rti(&mut self) -> u8 {
         // Pop the status flags from the stack
         self.registers.flags = self.pop();
 
@@ -1212,7 +1221,7 @@ impl Cpu {
     ///
     /// Pulls the program counter (PC) from the stack and sets it to the address of the
     /// instruction that follows the subroutine call.
-    pub fn rts(&mut self) -> u8 {
+    fn rts(&mut self) -> u8 {
         // Pop the program counter from the stack and increment it
         self.registers.pc = self.pop_word() + 1;
 
@@ -1220,7 +1229,7 @@ impl Cpu {
         return 0;
     }
 
-    pub fn sbc(&mut self) -> u8 {
+    fn sbc(&mut self) -> u8 {
         let mut extra_cycle: u8 = 0;
 
         // Fetch the next byte from memory
@@ -1291,12 +1300,12 @@ impl Cpu {
         return extra_cycle;
     }
 
-    pub fn sec(&mut self) -> u8 {
+    fn sec(&mut self) -> u8 {
         return 0;
     }
 
     /// Set the decimal mode flag
-    pub fn sed(&mut self) -> u8 {
+    fn sed(&mut self) -> u8 {
         // Set the decimal mode flag to 1
         self.registers
             .set_flag(registers::registers::Flag::DecimalMode, true);
@@ -1305,12 +1314,12 @@ impl Cpu {
         return 0;
     }
 
-    pub fn sei(&mut self) -> u8 {
+    fn sei(&mut self) -> u8 {
         return 0;
     }
 
     /// Stores the accumulator register value into memory at the specified address.
-    pub fn sta(&mut self) -> u8 {
+    fn sta(&mut self) -> u8 {
         // Store the accumulator in memory
         self.write(self.addr_abs, self.registers.a);
 
@@ -1319,7 +1328,7 @@ impl Cpu {
     }
 
     /// Stores the value of the X register into memory.
-    pub fn stx(&mut self) -> u8 {
+    fn stx(&mut self) -> u8 {
         // Store the X register in memory
         self.write(self.addr_abs, self.registers.x);
 
@@ -1328,7 +1337,7 @@ impl Cpu {
     }
 
     /// Stores the value of the X register into memory.
-    pub fn sty(&mut self) -> u8 {
+    fn sty(&mut self) -> u8 {
         // Store the Y register in memory
         self.write(self.addr_abs, self.registers.y);
 
@@ -1337,7 +1346,7 @@ impl Cpu {
     }
 
     /// Transfers the accumulator to the X register.
-    pub fn tax(&mut self) -> u8 {
+    fn tax(&mut self) -> u8 {
         // Load the accumulator into the X register
         self.registers.x = self.registers.a;
 
@@ -1354,7 +1363,7 @@ impl Cpu {
     }
 
     /// Transfers the accumulator to the Y register.
-    pub fn tay(&mut self) -> u8 {
+    fn tay(&mut self) -> u8 {
         // Load the accumulator into the Y register
         self.registers.y = self.registers.a;
 
@@ -1371,7 +1380,7 @@ impl Cpu {
     }
 
     /// Transfers the stack pointer to the X register.
-    pub fn tsx(&mut self) -> u8 {
+    fn tsx(&mut self) -> u8 {
         // Load the stack pointer into the X register
         self.registers.x = self.registers.sp;
 
@@ -1388,7 +1397,7 @@ impl Cpu {
     }
 
     /// Transfers the X register to the accumulator.
-    pub fn txa(&mut self) -> u8 {
+    fn txa(&mut self) -> u8 {
         // Load the X register into the accumulator
         self.registers.a = self.registers.x;
 
@@ -1405,7 +1414,7 @@ impl Cpu {
     }
 
     /// Transfers the X register to the stack pointer.
-    pub fn txs(&mut self) -> u8 {
+    fn txs(&mut self) -> u8 {
         // Load the X register into the stack pointer
         self.registers.sp = self.registers.x;
 
@@ -1414,7 +1423,7 @@ impl Cpu {
     }
 
     /// Transfers the Y register to the accumulator.
-    pub fn tya(&mut self) -> u8 {
+    fn tya(&mut self) -> u8 {
         // Load the Y register into the accumulator
         self.registers.a = self.registers.y;
 
@@ -1433,61 +1442,61 @@ impl Cpu {
     /**
      * Illegal instructions
      */
-    pub fn ahx(&mut self) -> u8 {
+    fn ahx(&mut self) -> u8 {
         return 0;
     }
-    pub fn alr(&mut self) -> u8 {
+    fn alr(&mut self) -> u8 {
         return 0;
     }
-    pub fn anc(&mut self) -> u8 {
+    fn anc(&mut self) -> u8 {
         return 0;
     }
-    pub fn arr(&mut self) -> u8 {
+    fn arr(&mut self) -> u8 {
         return 0;
     }
-    pub fn axs(&mut self) -> u8 {
+    fn axs(&mut self) -> u8 {
         return 0;
     }
-    pub fn dcp(&mut self) -> u8 {
+    fn dcp(&mut self) -> u8 {
         return 0;
     }
-    pub fn isc(&mut self) -> u8 {
+    fn isc(&mut self) -> u8 {
         return 0;
     }
-    pub fn kil(&mut self) -> u8 {
+    fn kil(&mut self) -> u8 {
         return 0;
     }
-    pub fn las(&mut self) -> u8 {
+    fn las(&mut self) -> u8 {
         return 0;
     }
-    pub fn lax(&mut self) -> u8 {
+    fn lax(&mut self) -> u8 {
         return 0;
     }
-    pub fn rla(&mut self) -> u8 {
+    fn rla(&mut self) -> u8 {
         return 0;
     }
-    pub fn rra(&mut self) -> u8 {
+    fn rra(&mut self) -> u8 {
         return 0;
     }
-    pub fn sax(&mut self) -> u8 {
+    fn sax(&mut self) -> u8 {
         return 0;
     }
-    pub fn shx(&mut self) -> u8 {
+    fn shx(&mut self) -> u8 {
         return 0;
     }
-    pub fn shy(&mut self) -> u8 {
+    fn shy(&mut self) -> u8 {
         return 0;
     }
-    pub fn slo(&mut self) -> u8 {
+    fn slo(&mut self) -> u8 {
         return 0;
     }
-    pub fn sre(&mut self) -> u8 {
+    fn sre(&mut self) -> u8 {
         return 0;
     }
-    pub fn tas(&mut self) -> u8 {
+    fn tas(&mut self) -> u8 {
         return 0;
     }
-    pub fn xaa(&mut self) -> u8 {
+    fn xaa(&mut self) -> u8 {
         return 0;
     }
 }

@@ -25,8 +25,74 @@ pub trait Bus {
     /// bus.add_device(device);
     /// ```
     fn add_device(&mut self, device: Box<dyn Device>);
+
+    /// Reads a byte from the bus at the specified address.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `address` - The address to read from.
+    /// 
+    /// # Returns
+    /// 
+    /// The byte read from the bus.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use cpu6502::bus::Bus;
+    /// let mut bus = Bus::new();
+    /// let value = bus.read(0x0000);
+    /// ```
+    /// 
+    /// # Notes
+    /// 
+    /// This function will call the `read()` function on the device that contains the address.
+    /// 
+    /// # See Also
+    /// 
+    /// * `write()`
+    /// * `load_rom_at()`
     fn read(&mut self, address: u16) -> u8;
+
+    /// Writes a byte to the bus at the specified address.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `address` - The address to write to.
+    /// * `value` - The value to write.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use cpu6502::bus::Bus;
+    /// let mut bus = Bus::new();
+    /// bus.write(0x0000, 0x00);
+    /// ```
+    /// 
+    /// # Notes
+    /// 
+    /// This function will call the `write()` function on the device that contains the address.
     fn write(&mut self, address: u16, value: u8);
+
+    /// Loads a ROM into memory at the specified address.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `rom` - The ROM to load.
+    /// * `address` - The address to load the ROM at.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use cpu6502::bus::Bus;
+    /// let mut bus = Bus::new();
+    /// let rom = [0x00, 0x01, 0x02, 0x03];
+    /// bus.load_rom_at(&rom, 0x0000);
+    /// ```
+    /// 
+    /// # Notes
+    /// 
+    /// This function will call the `load_rom_at()` function on the device that contains the address.
     fn load_rom_at(&mut self, rom: &[u8], address: u16);
 }
 

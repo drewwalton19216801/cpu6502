@@ -1,3 +1,8 @@
+//! # Registers
+//! 
+//! This module contains the registers for the 6502 CPU.
+
+
 pub mod registers {
 
     pub struct Registers {
