@@ -918,11 +918,23 @@ impl Cpu {
         return 0;
     }
 
+    /// Clear the interrupt disable flag
     fn cli(&mut self) -> u8 {
+        // Set the interrupt disable flag to 0
+        self.registers
+            .set_flag(registers::registers::Flag::InterruptDisable, false);
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Clear the overflow flag
     fn clv(&mut self) -> u8 {
+        // Set the overflow flag to 0
+        self.registers
+            .set_flag(registers::registers::Flag::Overflow, false);
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -955,23 +967,121 @@ impl Cpu {
         return 1;
     }
 
+    /// Compares the X register with a value in memory.
     fn cpx(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the comparison with wrapping_sub
+        self.temp = self.registers.x as u16;
+        self.temp = self.temp.wrapping_sub(self.fetched as u16);
+
+        // Set the carry flag if the X register is greater than or equal to the fetched value
+        self.registers.set_flag(
+            registers::registers::Flag::Carry,
+            self.registers.x >= self.fetched,
+        );
+
+        // Set the Zero and Negative flags
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.temp & 0x0080) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Compares the Y register with a value in memory.
     fn cpy(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the comparison with wrapping_sub
+        self.temp = self.registers.y as u16;
+        self.temp = self.temp.wrapping_sub(self.fetched as u16);
+
+        // Set the carry flag if the Y register is greater than or equal to the fetched value
+        self.registers.set_flag(
+            registers::registers::Flag::Carry,
+            self.registers.y >= self.fetched,
+        );
+
+        // Set the Zero and Negative flags
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.temp & 0x0080) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Decrements a value in memory by one.
     fn dec(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Decrement the fetched value
+        self.temp = self.fetched as u16;
+        self.temp = self.temp.wrapping_sub(1);
+
+        // Store the decremented value in memory
+        self.write(self.addr_abs, (self.temp & 0x00FF) as u8);
+
+        // Set the Zero and Negative flags
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.temp & 0x0080) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Decrements the X register by one.
     fn dex(&mut self) -> u8 {
+        // Decrement the X register
+        self.registers.x = self.registers.x.wrapping_sub(1);
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.x & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Decrements the Y register by one.
     fn dey(&mut self) -> u8 {
+        // Decrement the Y register
+        self.registers.y = self.registers.y.wrapping_sub(1);
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.y & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -979,15 +1089,63 @@ impl Cpu {
         return 0;
     }
 
+    /// Increments a value in memory by one.
     fn inc(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Increment the fetched value
+        self.temp = self.fetched as u16;
+        self.temp = self.temp.wrapping_add(1);
+
+        // Store the incremented value in memory
+        self.write(self.addr_abs, (self.temp & 0x00FF) as u8);
+
+        // Set the Zero and Negative flags
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.temp & 0x0080) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Increments the X register by one.
     fn inx(&mut self) -> u8 {
+        // Increment the X register
+        self.registers.x = self.registers.x.wrapping_add(1);
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.x & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// Increments the Y register by one.
     fn iny(&mut self) -> u8 {
+        // Increment the Y register
+        self.registers.y = self.registers.y.wrapping_add(1);
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.y & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -1077,16 +1235,62 @@ impl Cpu {
         return 1;
     }
 
+    /// Shifts the accumulator left by one bit, setting the carry flag if the most significant bit is set.
     fn lsr(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Shift the fetched byte right by 1 bit
+        self.temp = self.fetched as u16;
+        self.temp >>= 1;
+
+        // Set the carry flag if the 9th bit of the temp variable is 1
+        self.registers
+            .set_flag(registers::registers::Flag::Carry, (self.temp & 0x01) > 0);
+
+        // Set the Zero and Negative flags
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
+        self.registers
+            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+
+        // If we are in implied mode, store the temp variable in the accumulator
+        if self.addr_mode == AddressingMode::Implied {
+            self.registers.a = (self.temp & 0x00FF) as u8;
+        } else {
+            // Otherwise, store the temp variable in memory
+            self.write(self.addr_abs, (self.temp & 0x00FF) as u8);
+        }
+
+        // Return the number of cycles required
         return 0;
     }
 
+    /// No-operation
     fn nop(&mut self) -> u8 {
         return 0;
     }
 
+    /// Performs a bitwise OR operation between the accumulator and a value in memory,
     fn ora(&mut self) -> u8 {
-        return 0;
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Perform the OR operation
+        self.registers.a |= self.fetched;
+
+        // Set the Zero and Negative flags
+        self.registers
+            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.registers.a & 0x80) > 0,
+        );
+
+        // Return the number of cycles required
+        return 1;
     }
 
     /// Push the accumulator onto the stack
@@ -1159,7 +1363,41 @@ impl Cpu {
         return 0;
     }
 
+    /// Rotate the accumulator left by one bit, with the carry flag replacing the bit that is shifted out.
     fn rol(&mut self) -> u8 {
+        // Fetch the next byte from memory
+        self.fetch();
+
+        // Shift the fetched byte left by 1 bit
+        self.temp = self.fetched as u16;
+        self.temp <<= 1;
+
+        // Set the 0th bit of the temp variable to the value of the carry flag
+        if self.registers.get_flag(registers::registers::Flag::Carry) {
+            self.temp |= 0x01;
+        }
+
+        // Set the carry flag if the 9th bit of the temp variable is 1
+        self.registers
+            .set_flag(registers::registers::Flag::Carry, (self.temp & 0xFF00) > 0);
+
+        // Set the Zero and Negative flags
+        self.registers.set_flag(
+            registers::registers::Flag::Zero,
+            (self.temp & 0x00FF) == 0x0000,
+        );
+        self.registers
+            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+
+        // If we are in implied mode, store the temp variable in the accumulator
+        if self.addr_mode == AddressingMode::Implied {
+            self.registers.a = (self.temp & 0x00FF) as u8;
+        } else {
+            // Otherwise, store the temp variable in memory
+            self.write(self.addr_abs, (self.temp & 0x00FF) as u8);
+        }
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -1453,7 +1691,13 @@ impl Cpu {
         return extra_cycle;
     }
 
+    /// Set the carry flag
     fn sec(&mut self) -> u8 {
+        // Set the carry flag to 1
+        self.registers
+            .set_flag(registers::registers::Flag::Carry, true);
+
+        // Return the number of cycles required
         return 0;
     }
 
@@ -1467,7 +1711,13 @@ impl Cpu {
         return 0;
     }
 
+    /// Set the interrupt disable flag
     fn sei(&mut self) -> u8 {
+        // Set the interrupt disable flag to 1
+        self.registers
+            .set_flag(registers::registers::Flag::InterruptDisable, true);
+
+        // Return the number of cycles required
         return 0;
     }
 
