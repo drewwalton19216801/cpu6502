@@ -81,6 +81,7 @@ impl Variant {
 }
 
 /// CPU states
+#[derive(PartialEq)]
 pub enum State {
     /// CPU is stopped
     Stopped,
@@ -244,6 +245,10 @@ impl Cpu {
 
     /// Executes a single clock cycle
     pub fn clock(&mut self) {
+        // If We are in a stopped state, return
+        if self.state == State::Stopped {
+            return;
+        }
         // If we have no cycles remaining, fetch the next opcode
         if self.cycles == 0 {
             // Set state to fetching
@@ -1867,6 +1872,10 @@ impl Cpu {
         return 0;
     }
     fn kil(&mut self) -> u8 {
+        // KIL instruction
+        // TODO: Implement this
+        // For now, just halt the CPU
+        self.state = State::Stopped;
         return 0;
     }
     fn las(&mut self) -> u8 {
