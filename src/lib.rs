@@ -5,6 +5,9 @@
 //! The CPU connects to a bus, and your emulator can define any number of devices
 //! on the bus. The CPU can then read and write to these devices.
 
+#[macro_use]
+extern crate bitflags;
+
 mod addresses;
 pub mod bus;
 mod instructions;
@@ -12,7 +15,7 @@ mod registers;
 
 use bus::Bus;
 use instructions::INSTRUCTION_LIST;
-use registers::registers::Flag;
+use registers::registers::Flags;
 
 use crate::{
     addresses::addresses::IRQ_VECTOR, addresses::addresses::NMI_VECTOR,
@@ -140,7 +143,7 @@ impl Cpu {
         self.registers.pc = self.read_word(RESET_VECTOR);
         self.registers.sp = 0xFD;
         // Set all flags to 0x00, except for the unused flag and the interrupt disable flag
-        self.registers.flags = 0x00 | Flag::Unused as u8 | Flag::InterruptDisable as u8;
+        self.registers.flags = 0x00 | Flags::Unused.bits() | Flags::InterruptDisable.bits();
         self.cycles = 8;
     }
 
@@ -333,25 +336,25 @@ impl Cpu {
         // If interrupts are enabled, push the program counter and flags to the stack
         if self
             .registers
-            .get_flag(registers::registers::Flag::InterruptDisable)
+            .get_flag(registers::registers::Flags::InterruptDisable)
             == false
         {
             self.push_word(self.registers.pc);
 
             // Set the break flag to 0
             self.registers
-                .set_flag(registers::registers::Flag::Break, false);
+                .set_flag(registers::registers::Flags::Break, false);
 
             // Push the status flags to the stack
             self.registers
-                .set_flag(registers::registers::Flag::Unused, true);
+                .set_flag(registers::registers::Flags::Unused, true);
             self.registers
-                .set_flag(registers::registers::Flag::Break, true);
+                .set_flag(registers::registers::Flags::Break, true);
             self.registers
-                .set_flag(registers::registers::Flag::InterruptDisable, true);
+                .set_flag(registers::registers::Flags::InterruptDisable, true);
             self.push(self.registers.flags);
             self.registers
-                .set_flag(registers::registers::Flag::InterruptDisable, false);
+                .set_flag(registers::registers::Flags::InterruptDisable, false);
 
             // Set the program counter to the interrupt vector
             self.registers.pc = self.read_word(IRQ_VECTOR);
@@ -371,18 +374,18 @@ impl Cpu {
 
         // Set the break flag to 0
         self.registers
-            .set_flag(registers::registers::Flag::Break, false);
+            .set_flag(registers::registers::Flags::Break, false);
 
         // Push the status flags to the stack
         self.registers
-            .set_flag(registers::registers::Flag::Unused, true);
+            .set_flag(registers::registers::Flags::Unused, true);
         self.registers
-            .set_flag(registers::registers::Flag::Break, true);
+            .set_flag(registers::registers::Flags::Break, true);
         self.registers
-            .set_flag(registers::registers::Flag::InterruptDisable, true);
+            .set_flag(registers::registers::Flags::InterruptDisable, true);
         self.push(self.registers.flags);
         self.registers
-            .set_flag(registers::registers::Flag::InterruptDisable, false);
+            .set_flag(registers::registers::Flags::InterruptDisable, false);
 
         // Set the program counter to the NMI vector
         self.registers.pc = self.read_word(NMI_VECTOR);
@@ -510,35 +513,37 @@ impl Cpu {
         // Perform the addition
         self.temp = self.registers.a as u16
             + self.fetched as u16
-            + self.registers.get_flag(registers::registers::Flag::Carry) as u16;
+            + self.registers.get_flag(registers::registers::Flags::Carry) as u16;
 
         // Set the zero flag if the result is 0
         self.registers
-            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0);
+            .set_flag(registers::registers::Flags::Zero, (self.temp & 0x00FF) == 0);
 
         // if the CPU variant is NOT NES, check for decimal flag
         if self.variant != Variant::NES {
             // If the decimal flag is set, perform BCD addition
             if self
                 .registers
-                .get_flag(registers::registers::Flag::DecimalMode)
+                .get_flag(registers::registers::Flags::DecimalMode)
             {
                 // If the result is greater than 99, add 96 to it
                 if (self.registers.a & 0xF)
                     + (self.fetched & 0xF)
-                    + (self.registers.get_flag(registers::registers::Flag::Carry) as u8)
+                    + (self.registers.get_flag(registers::registers::Flags::Carry) as u8)
                     > 9
                 {
                     self.temp += 6;
                 }
 
                 // Set the negative flag if the result is negative
-                self.registers
-                    .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+                self.registers.set_flag(
+                    registers::registers::Flags::Negative,
+                    (self.temp & 0x80) > 0,
+                );
 
                 // Set the overflow flag if the result is greater than 127 or less than -128
                 self.registers.set_flag(
-                    registers::registers::Flag::Overflow,
+                    registers::registers::Flags::Overflow,
                     ((self.registers.a ^ self.fetched) & 0x80 == 0)
                         && ((self.fetched ^ self.temp as u8) & 0x80 != 0),
                 );
@@ -550,26 +555,28 @@ impl Cpu {
 
                 // Set the carry flag if the result is greater than 0x99
                 self.registers
-                    .set_flag(registers::registers::Flag::Carry, self.temp > 0x99FF);
+                    .set_flag(registers::registers::Flags::Carry, self.temp > 0x99FF);
 
                 // We used an extra cycle
                 extra_cycle = 1;
             }
         } else {
             // Set the negative flag if the result is negative
-            self.registers
-                .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+            self.registers.set_flag(
+                registers::registers::Flags::Negative,
+                (self.temp & 0x80) > 0,
+            );
 
             // Set the overflow flag if the result is greater than 127 or less than -128
             self.registers.set_flag(
-                registers::registers::Flag::Overflow,
+                registers::registers::Flags::Overflow,
                 ((self.registers.a ^ self.fetched) & 0x80 == 0)
                     && ((self.fetched ^ self.temp as u8) & 0x80 != 0),
             );
 
             // Set the carry flag if the result is greater than 255
             self.registers
-                .set_flag(registers::registers::Flag::Carry, self.temp > 255);
+                .set_flag(registers::registers::Flags::Carry, self.temp > 255);
         }
 
         // Store the result in the accumulator
@@ -590,9 +597,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.a == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.a & 0x80) > 0,
         );
 
@@ -612,15 +619,17 @@ impl Cpu {
 
         // Set the carry flag if the 9th bit of the temp variable is 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, (self.temp & 0xFF00) > 0);
+            .set_flag(registers::registers::Flags::Carry, (self.temp & 0xFF00) > 0);
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x00,
         );
-        self.registers
-            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flags::Negative,
+            (self.temp & 0x80) > 0,
+        );
 
         // If we are in implied mode, store the temp variable in the accumulator
         if self.addr_mode == AddressingMode::Implied {
@@ -637,7 +646,7 @@ impl Cpu {
     /// Branches to the address specified by the relative offset if the carry flag is clear.
     fn bcc(&mut self) -> u8 {
         // If the carry flag is 0, branch
-        if self.registers.get_flag(registers::registers::Flag::Carry) == false {
+        if self.registers.get_flag(registers::registers::Flags::Carry) == false {
             // We branched, so add a cycle
             self.cycles += 1;
 
@@ -659,7 +668,7 @@ impl Cpu {
     /// Branches to the address specified by the relative offset if the carry flag is set.
     fn bcs(&mut self) -> u8 {
         // If the carry flag is 1, branch
-        if self.registers.get_flag(registers::registers::Flag::Carry) {
+        if self.registers.get_flag(registers::registers::Flags::Carry) {
             // We branched, so add a cycle
             self.cycles += 1;
 
@@ -685,7 +694,7 @@ impl Cpu {
     /// The number of cycles the operation took.
     fn beq(&mut self) -> u8 {
         // If the zero flag is 1, branch
-        if self.registers.get_flag(registers::registers::Flag::Zero) {
+        if self.registers.get_flag(registers::registers::Flags::Zero) {
             // We branched, so add a cycle
             self.cycles += 1;
 
@@ -725,19 +734,19 @@ impl Cpu {
 
         // Set the negative flag to the seventh bit of the fetched value
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.fetched & 0x80) > 0,
         );
 
         // Set the overflow flag to the sixth bit of the fetched value
         self.registers.set_flag(
-            registers::registers::Flag::Overflow,
+            registers::registers::Flags::Overflow,
             (self.fetched & 0x40) > 0,
         );
 
         // Set the Zero flag to the result of the AND operation
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.temp == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.temp == 0x00);
 
         // Return the number of cycles required
         return 0;
@@ -748,7 +757,7 @@ impl Cpu {
         // If the negative flag is 1, branch
         if self
             .registers
-            .get_flag(registers::registers::Flag::Negative)
+            .get_flag(registers::registers::Flags::Negative)
         {
             // We branched, so add a cycle
             self.cycles += 1;
@@ -776,7 +785,7 @@ impl Cpu {
     /// The number of cycles the operation took.
     fn bne(&mut self) -> u8 {
         // If the zero flag is 0, branch
-        if self.registers.get_flag(registers::registers::Flag::Zero) == false {
+        if self.registers.get_flag(registers::registers::Flags::Zero) == false {
             // We branched, so add a cycle
             self.cycles += 1;
 
@@ -801,7 +810,7 @@ impl Cpu {
         // If the negative flag is 0, branch
         if self
             .registers
-            .get_flag(registers::registers::Flag::Negative)
+            .get_flag(registers::registers::Flags::Negative)
             == false
         {
             // We branched, so add a cycle
@@ -831,21 +840,21 @@ impl Cpu {
 
         // Set the interrupt disable flag to 1
         self.registers
-            .set_flag(registers::registers::Flag::InterruptDisable, true);
+            .set_flag(registers::registers::Flags::InterruptDisable, true);
 
         // Push the PC to the stack
         self.push_word(self.registers.pc);
 
         // Set the break flag
         self.registers
-            .set_flag(registers::registers::Flag::Break, true);
+            .set_flag(registers::registers::Flags::Break, true);
 
         // Push the flags to the stack
         self.push(self.registers.flags);
 
         // Clear the break flag
         self.registers
-            .set_flag(registers::registers::Flag::Break, false);
+            .set_flag(registers::registers::Flags::Break, false);
 
         // Set the PC to the data at the interrupt vector
         self.registers.pc = self.read_word(IRQ_VECTOR);
@@ -859,7 +868,7 @@ impl Cpu {
         // If the overflow flag is 0, branch
         if self
             .registers
-            .get_flag(registers::registers::Flag::Overflow)
+            .get_flag(registers::registers::Flags::Overflow)
             == false
         {
             // We branched, so add a cycle
@@ -886,7 +895,7 @@ impl Cpu {
         // If the overflow flag is 1, branch
         if self
             .registers
-            .get_flag(registers::registers::Flag::Overflow)
+            .get_flag(registers::registers::Flags::Overflow)
         {
             // We branched, so add a cycle
             self.cycles += 1;
@@ -911,7 +920,7 @@ impl Cpu {
     fn clc(&mut self) -> u8 {
         // Set the carry flag to 0
         self.registers
-            .set_flag(registers::registers::Flag::Carry, false);
+            .set_flag(registers::registers::Flags::Carry, false);
 
         // Return the number of cycles required
         return 0;
@@ -921,7 +930,7 @@ impl Cpu {
     fn cld(&mut self) -> u8 {
         // Set the decimal mode flag to 0
         self.registers
-            .set_flag(registers::registers::Flag::DecimalMode, false);
+            .set_flag(registers::registers::Flags::DecimalMode, false);
 
         // Return the number of cycles required
         return 0;
@@ -931,7 +940,7 @@ impl Cpu {
     fn cli(&mut self) -> u8 {
         // Set the interrupt disable flag to 0
         self.registers
-            .set_flag(registers::registers::Flag::InterruptDisable, false);
+            .set_flag(registers::registers::Flags::InterruptDisable, false);
 
         // Return the number of cycles required
         return 0;
@@ -941,7 +950,7 @@ impl Cpu {
     fn clv(&mut self) -> u8 {
         // Set the overflow flag to 0
         self.registers
-            .set_flag(registers::registers::Flag::Overflow, false);
+            .set_flag(registers::registers::Flags::Overflow, false);
 
         // Return the number of cycles required
         return 0;
@@ -958,17 +967,17 @@ impl Cpu {
 
         // Set the carry flag if the accumulator is greater than or equal to the fetched value
         self.registers.set_flag(
-            registers::registers::Flag::Carry,
+            registers::registers::Flags::Carry,
             self.registers.a >= self.fetched,
         );
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.temp & 0x0080) > 0,
         );
 
@@ -987,17 +996,17 @@ impl Cpu {
 
         // Set the carry flag if the X register is greater than or equal to the fetched value
         self.registers.set_flag(
-            registers::registers::Flag::Carry,
+            registers::registers::Flags::Carry,
             self.registers.x >= self.fetched,
         );
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.temp & 0x0080) > 0,
         );
 
@@ -1016,17 +1025,17 @@ impl Cpu {
 
         // Set the carry flag if the Y register is greater than or equal to the fetched value
         self.registers.set_flag(
-            registers::registers::Flag::Carry,
+            registers::registers::Flags::Carry,
             self.registers.y >= self.fetched,
         );
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.temp & 0x0080) > 0,
         );
 
@@ -1048,11 +1057,11 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.temp & 0x0080) > 0,
         );
 
@@ -1067,9 +1076,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.x == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.x & 0x80) > 0,
         );
 
@@ -1084,9 +1093,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.y == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.y & 0x80) > 0,
         );
 
@@ -1112,11 +1121,11 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.temp & 0x0080) > 0,
         );
 
@@ -1131,9 +1140,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.x == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.x & 0x80) > 0,
         );
 
@@ -1148,9 +1157,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.y == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.y & 0x80) > 0,
         );
 
@@ -1194,9 +1203,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.a == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.a & 0x80) > 0,
         );
 
@@ -1214,9 +1223,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.x == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.x & 0x80) > 0,
         );
 
@@ -1234,9 +1243,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.y == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.y & 0x80) > 0,
         );
 
@@ -1255,15 +1264,17 @@ impl Cpu {
 
         // Set the carry flag if the 9th bit of the temp variable is 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, (self.temp & 0x01) > 0);
+            .set_flag(registers::registers::Flags::Carry, (self.temp & 0x01) > 0);
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
-        self.registers
-            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flags::Negative,
+            (self.temp & 0x80) > 0,
+        );
 
         // If we are in implied mode, store the temp variable in the accumulator
         if self.addr_mode == AddressingMode::Implied {
@@ -1292,9 +1303,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.a == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.a & 0x80) > 0,
         );
 
@@ -1332,11 +1343,11 @@ impl Cpu {
 
         // Set break flag to 0
         self.registers
-            .set_flag(registers::registers::Flag::Break, false);
+            .set_flag(registers::registers::Flags::Break, false);
 
         // Set unused flag to 1
         self.registers
-            .set_flag(registers::registers::Flag::Unused, true);
+            .set_flag(registers::registers::Flags::Unused, true);
 
         // Return the number of cycles required
         return 0;
@@ -1349,9 +1360,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.a == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.a & 0x80) > 0,
         );
 
@@ -1366,7 +1377,7 @@ impl Cpu {
 
         // Set the unused flag to 1
         self.registers
-            .set_flag(registers::registers::Flag::Unused, true);
+            .set_flag(registers::registers::Flags::Unused, true);
 
         // Return the number of cycles required
         return 0;
@@ -1382,21 +1393,23 @@ impl Cpu {
         self.temp <<= 1;
 
         // Set the 0th bit of the temp variable to the value of the carry flag
-        if self.registers.get_flag(registers::registers::Flag::Carry) {
+        if self.registers.get_flag(registers::registers::Flags::Carry) {
             self.temp |= 0x01;
         }
 
         // Set the carry flag if the 9th bit of the temp variable is 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, (self.temp & 0xFF00) > 0);
+            .set_flag(registers::registers::Flags::Carry, (self.temp & 0xFF00) > 0);
 
         // Set the Zero and Negative flags
         self.registers.set_flag(
-            registers::registers::Flag::Zero,
+            registers::registers::Flags::Zero,
             (self.temp & 0x00FF) == 0x0000,
         );
-        self.registers
-            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flags::Negative,
+            (self.temp & 0x80) > 0,
+        );
 
         // If we are in implied mode, store the temp variable in the accumulator
         if self.addr_mode == AddressingMode::Implied {
@@ -1462,12 +1475,14 @@ impl Cpu {
         self.temp &= 0xFF;
 
         // Set the negative flag if the 8th bit of the temp variable is 1
-        self.registers
-            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flags::Negative,
+            (self.temp & 0x80) > 0,
+        );
 
         // Set the zero flag if the temp variable is 0
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.temp == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.temp == 0x00);
 
         // If the addressing mode is immediate, store the temp variable in the accumulator
         if self.addr_mode == AddressingMode::Immediate {
@@ -1490,13 +1505,13 @@ impl Cpu {
         self.temp = self.registers.a as u16;
 
         // If the carry flag is set, set the 9th bit of the temp variable
-        if self.registers.get_flag(registers::registers::Flag::Carry) {
+        if self.registers.get_flag(registers::registers::Flags::Carry) {
             self.temp |= 0x100;
         }
 
         // Set the carry flag if the 9th bit of the temp variable is 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, (self.temp & 0x01) > 0);
+            .set_flag(registers::registers::Flags::Carry, (self.temp & 0x01) > 0);
 
         // Shift the temp variable right by 1 bit
         self.temp >>= 1;
@@ -1505,12 +1520,14 @@ impl Cpu {
         self.temp &= 0xFF;
 
         // Set the negative flag if the 8th bit of the temp variable is 1
-        self.registers
-            .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flags::Negative,
+            (self.temp & 0x80) > 0,
+        );
 
         // Set the zero flag if the temp variable is 0
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.temp == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.temp == 0x00);
 
         // Store the temp variable in the accumulator
         self.registers.a = self.temp as u8;
@@ -1535,11 +1552,11 @@ impl Cpu {
 
         // Set the carry flag if the 8th bit of the temp variable is 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, (self.temp & 0x80) > 0);
+            .set_flag(registers::registers::Flags::Carry, (self.temp & 0x80) > 0);
 
         // Set the negative flag if the temp variable is 0
         self.registers
-            .set_flag(registers::registers::Flag::Negative, self.temp == 0x00);
+            .set_flag(registers::registers::Flags::Negative, self.temp == 0x00);
 
         // Store the temp variable in memory
         self.write(self.addr_abs, self.temp as u8);
@@ -1557,13 +1574,13 @@ impl Cpu {
         self.temp = self.fetch() as u16;
 
         // If the carry flag is set, set the 9th bit of the temp variable
-        if self.registers.get_flag(registers::registers::Flag::Carry) {
+        if self.registers.get_flag(registers::registers::Flags::Carry) {
             self.temp |= 0x100;
         }
 
         // Set the carry flag if the 9th bit of the temp variable is 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, (self.temp & 0x01) > 0);
+            .set_flag(registers::registers::Flags::Carry, (self.temp & 0x01) > 0);
 
         // Shift the temp variable right by 1 bit
         self.temp >>= 1;
@@ -1573,11 +1590,11 @@ impl Cpu {
 
         // Set the negative flag if the temp variable is 0
         self.registers
-            .set_flag(registers::registers::Flag::Negative, self.temp == 0x00);
+            .set_flag(registers::registers::Flags::Negative, self.temp == 0x00);
 
         // Set the zero flag if the temp variable is 0
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.temp == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.temp == 0x00);
 
         // Store the temp variable in memory
         self.write(self.addr_abs, self.temp as u8);
@@ -1599,9 +1616,9 @@ impl Cpu {
         self.registers.flags = self.pop();
 
         self.registers
-            .set_flag(registers::registers::Flag::Break, false);
+            .set_flag(registers::registers::Flags::Break, false);
         self.registers
-            .set_flag(registers::registers::Flag::Unused, false);
+            .set_flag(registers::registers::Flags::Unused, false);
 
         // Pop the program counter from the stack
         self.registers.pc = self.pop_word();
@@ -1631,18 +1648,18 @@ impl Cpu {
         // Perform the subtraction using wrapping_sub
         self.temp = (self.registers.a as u16)
             .wrapping_sub(self.fetched as u16)
-            .wrapping_sub(1 - self.registers.get_flag(registers::registers::Flag::Carry) as u16);
+            .wrapping_sub(1 - self.registers.get_flag(registers::registers::Flags::Carry) as u16);
 
         // Set the zero flag if the result is 0
         self.registers
-            .set_flag(registers::registers::Flag::Zero, (self.temp & 0x00FF) == 0);
+            .set_flag(registers::registers::Flags::Zero, (self.temp & 0x00FF) == 0);
 
         // If the CPU variant is NOT NES
         if self.variant != Variant::NES {
             // If the decimal flag is set, perform BCD subtraction
             if self
                 .registers
-                .get_flag(registers::registers::Flag::DecimalMode)
+                .get_flag(registers::registers::Flags::DecimalMode)
             {
                 // Adjust the result for BCD
                 if (self.temp & 0x000F) > 0x0009 {
@@ -1651,13 +1668,13 @@ impl Cpu {
 
                 // Set the negative flag if the result is negative
                 self.registers.set_flag(
-                    registers::registers::Flag::Negative,
+                    registers::registers::Flags::Negative,
                     (self.temp & 0x0080) > 0,
                 );
 
                 // Set the overflow flag if the result is greater than 127 or less than -128
                 self.registers.set_flag(
-                    registers::registers::Flag::Overflow,
+                    registers::registers::Flags::Overflow,
                     ((self.registers.a ^ self.temp as u8)
                         & (self.fetched ^ self.temp as u8)
                         & 0x80)
@@ -1671,26 +1688,28 @@ impl Cpu {
 
                 // Set the carry flag if the result is greater than 127 or less than -128
                 self.registers
-                    .set_flag(registers::registers::Flag::Carry, self.temp > 0x99FF);
+                    .set_flag(registers::registers::Flags::Carry, self.temp > 0x99FF);
 
                 // We used an extra cycle
                 extra_cycle = 1;
             }
         } else {
             // Set the negative flag if the result is negative
-            self.registers
-                .set_flag(registers::registers::Flag::Negative, (self.temp & 0x80) > 0);
+            self.registers.set_flag(
+                registers::registers::Flags::Negative,
+                (self.temp & 0x80) > 0,
+            );
 
             // Set the overflow flag if the result is greater than 127 or less than -128
             self.registers.set_flag(
-                registers::registers::Flag::Overflow,
+                registers::registers::Flags::Overflow,
                 ((self.registers.a ^ self.fetched) & 0x80 != 0)
                     && ((self.fetched ^ self.temp as u8) & 0x80 != 0),
             );
 
             // Set the carry flag if the result is greater than 255
             self.registers
-                .set_flag(registers::registers::Flag::Carry, self.temp > 255);
+                .set_flag(registers::registers::Flags::Carry, self.temp > 255);
         }
 
         // Store the result in the accumulator
@@ -1704,7 +1723,7 @@ impl Cpu {
     fn sec(&mut self) -> u8 {
         // Set the carry flag to 1
         self.registers
-            .set_flag(registers::registers::Flag::Carry, true);
+            .set_flag(registers::registers::Flags::Carry, true);
 
         // Return the number of cycles required
         return 0;
@@ -1714,7 +1733,7 @@ impl Cpu {
     fn sed(&mut self) -> u8 {
         // Set the decimal mode flag to 1
         self.registers
-            .set_flag(registers::registers::Flag::DecimalMode, true);
+            .set_flag(registers::registers::Flags::DecimalMode, true);
 
         // Return the number of cycles required
         return 0;
@@ -1724,7 +1743,7 @@ impl Cpu {
     fn sei(&mut self) -> u8 {
         // Set the interrupt disable flag to 1
         self.registers
-            .set_flag(registers::registers::Flag::InterruptDisable, true);
+            .set_flag(registers::registers::Flags::InterruptDisable, true);
 
         // Return the number of cycles required
         return 0;
@@ -1764,9 +1783,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.x == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.x & 0x80) > 0,
         );
 
@@ -1781,9 +1800,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.y == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.y == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.y & 0x80) > 0,
         );
 
@@ -1798,9 +1817,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.x == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.x == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.x & 0x80) > 0,
         );
 
@@ -1815,9 +1834,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.a == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.a & 0x80) > 0,
         );
 
@@ -1841,9 +1860,9 @@ impl Cpu {
 
         // Set the Zero and Negative flags
         self.registers
-            .set_flag(registers::registers::Flag::Zero, self.registers.a == 0x00);
+            .set_flag(registers::registers::Flags::Zero, self.registers.a == 0x00);
         self.registers.set_flag(
-            registers::registers::Flag::Negative,
+            registers::registers::Flags::Negative,
             (self.registers.a & 0x80) > 0,
         );
 
