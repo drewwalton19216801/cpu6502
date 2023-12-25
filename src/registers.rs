@@ -1,7 +1,14 @@
 //! # Registers
-//! 
+//!
 //! This module contains the registers for the 6502 CPU.
-
+//!
+//! It contains the following registers:
+//! - Accumulator
+//! - X register
+//! - Y register
+//! - Program counter
+//! - Stack pointer
+//! - Status flags
 
 pub mod registers {
 
@@ -14,15 +21,18 @@ pub mod registers {
         pub flags: u8, // Status flags
     }
 
-    pub enum Flag {
-        Carry = 0b00000001,            // 1 << 0
-        Zero = 0b00000010,             // 1 << 1
-        InterruptDisable = 0b00000100, // 1 << 2
-        DecimalMode = 0b00001000,      // 1 << 3
-        Break = 0b00010000,            // 1 << 4
-        Unused = 0b00100000,           // 1 << 5
-        Overflow = 0b01000000,         // 1 << 6
-        Negative = 0b10000000,         // 1 << 7
+    bitflags! {
+        pub struct Flags: u8 {
+            const None = 0b00000000;
+            const Carry = 0b00000001;
+            const Zero = 0b00000010;
+            const InterruptDisable = 0b00000100;
+            const DecimalMode = 0b00001000;
+            const Break = 0b00010000;
+            const Unused = 0b00100000;
+            const Overflow = 0b01000000;
+            const Negative = 0b10000000;
+        }
     }
 
     impl Registers {
@@ -37,16 +47,16 @@ pub mod registers {
             }
         }
 
-        pub fn set_flag(&mut self, flag: Flag, value: bool) {
+        pub fn set_flag(&mut self, flag: Flags, value: bool) {
             if value {
-                self.flags |= flag as u8;
+                self.flags |= flag.bits();
             } else {
-                self.flags &= !(flag as u8);
+                self.flags &= !flag.bits();
             }
         }
 
-        pub fn get_flag(&self, flag: Flag) -> bool {
-            (self.flags & (flag as u8)) > 0
+        pub fn get_flag(&mut self, flag: Flags) -> bool {
+            self.flags & flag.bits() != 0
         }
 
         pub fn increment_sp(&mut self) {
@@ -60,38 +70,34 @@ pub mod registers {
         pub fn get_status_string(&mut self) -> String {
             let mut status = String::new();
             status.push_str("STATUS: ");
-            status.push_str(if self.get_flag(Flag::Negative) {
+            status.push_str(if self.get_flag(Flags::Negative) {
                 "N"
             } else {
                 "n"
             });
-            status.push_str(if self.get_flag(Flag::Overflow) {
+            status.push_str(if self.get_flag(Flags::Overflow) {
                 "V"
             } else {
                 "v"
             });
             status.push_str("-");
-            status.push_str(if self.get_flag(Flag::Break) {
+            status.push_str(if self.get_flag(Flags::Break) {
                 "B"
             } else {
                 "b"
             });
-            status.push_str(if self.get_flag(Flag::DecimalMode) {
+            status.push_str(if self.get_flag(Flags::DecimalMode) {
                 "D"
             } else {
                 "d"
             });
-            status.push_str(if self.get_flag(Flag::InterruptDisable) {
+            status.push_str(if self.get_flag(Flags::InterruptDisable) {
                 "I"
             } else {
                 "i"
             });
-            status.push_str(if self.get_flag(Flag::Zero) {
-                "Z"
-            } else {
-                "z"
-            });
-            status.push_str(if self.get_flag(Flag::Carry) {
+            status.push_str(if self.get_flag(Flags::Zero) { "Z" } else { "z" });
+            status.push_str(if self.get_flag(Flags::Carry) {
                 "C"
             } else {
                 "c"
@@ -102,24 +108,53 @@ pub mod registers {
 
     #[cfg(test)]
     mod tests {
+        use crate::registers;
+
         use super::*;
 
         #[test]
-        fn test_set_flag() {
+        fn test_flags() {
             let mut registers = Registers::new();
-            registers.set_flag(Flag::Negative, true);
-            assert_eq!(registers.get_flag(Flag::Negative), true);
-            registers.set_flag(Flag::Negative, false);
-            assert_eq!(registers.get_flag(Flag::Negative), false);
+            registers.set_flag(registers::registers::Flags::Carry, true);
+            registers.set_flag(registers::registers::Flags::Zero, true);
+            registers.set_flag(registers::registers::Flags::Negative, true);
+
+            assert_eq!(registers.get_flag(registers::registers::Flags::Carry), true);
+            assert_eq!(registers.get_flag(registers::registers::Flags::Zero), true);
+            assert_eq!(
+                registers.get_flag(registers::registers::Flags::Negative),
+                true
+            )
         }
 
         #[test]
-        fn test_get_flag() {
+        fn test_increment_sp() {
             let mut registers = Registers::new();
-            registers.set_flag(Flag::Negative, true);
-            assert_eq!(registers.get_flag(Flag::Negative), true);
-            registers.set_flag(Flag::Negative, false);
-            assert_eq!(registers.get_flag(Flag::Negative), false);
+            registers.sp = 0x01;
+            registers.increment_sp();
+            assert_eq!(registers.sp, 0x02);
+        }
+
+        #[test]
+        fn test_decrement_sp() {
+            let mut registers = Registers::new();
+            registers.sp = 0x02;
+            registers.decrement_sp();
+            assert_eq!(registers.sp, 0x01);
+        }
+
+        #[test]
+        fn test_get_status_string() {
+            let mut registers = Registers::new();
+            // Set flags to random values
+            registers.set_flag(registers::registers::Flags::Negative, true);
+            registers.set_flag(registers::registers::Flags::Overflow, true);
+            registers.set_flag(registers::registers::Flags::Break, false);
+            registers.set_flag(registers::registers::Flags::DecimalMode, true);
+            registers.set_flag(registers::registers::Flags::InterruptDisable, false);
+            registers.set_flag(registers::registers::Flags::Zero, true);
+            registers.set_flag(registers::registers::Flags::Carry, false);
+            assert_eq!(registers.get_status_string(), "STATUS: NV-bDiZc");
         }
 
         #[test]
