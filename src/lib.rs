@@ -7,7 +7,6 @@
 
 mod addresses;
 pub mod bus;
-pub mod device;
 mod instructions;
 mod registers;
 
