@@ -13,6 +13,7 @@ mod registers;
 
 use bus::Bus;
 use instructions::INSTRUCTION_LIST;
+use registers::registers::Flag;
 
 use crate::{
     addresses::addresses::IRQ_VECTOR, addresses::addresses::NMI_VECTOR,
@@ -140,7 +141,7 @@ impl Cpu {
         self.registers.pc = self.read_word(RESET_VECTOR);
         self.registers.sp = 0xFD;
         // Set all flags to 0x00, except for the unused flag and the interrupt disable flag
-        self.registers.flags = 0x24;
+        self.registers.flags = 0x00 | Flag::Unused as u8 | Flag::InterruptDisable as u8;
         self.cycles = 8;
     }
 
@@ -706,13 +707,13 @@ impl Cpu {
     }
 
     /// Test bits in memory with the accumulator.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// The number of cycles required.
-    /// 
+    ///
     /// # Flags
-    /// 
+    ///
     /// The negative flag is set to the seventh bit of the fetched value.
     /// The overflow flag is set to the sixth bit of the fetched value.
     /// The zero flag is set to the result of the AND operation between the fetched value and the accumulator.
@@ -724,12 +725,16 @@ impl Cpu {
         self.temp = self.registers.a as u16 & self.fetched as u16;
 
         // Set the negative flag to the seventh bit of the fetched value
-        self.registers
-            .set_flag(registers::registers::Flag::Negative, (self.fetched & 0x80) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Negative,
+            (self.fetched & 0x80) > 0,
+        );
 
         // Set the overflow flag to the sixth bit of the fetched value
-        self.registers
-            .set_flag(registers::registers::Flag::Overflow, (self.fetched & 0x40) > 0);
+        self.registers.set_flag(
+            registers::registers::Flag::Overflow,
+            (self.fetched & 0x40) > 0,
+        );
 
         // Set the Zero flag to the result of the AND operation
         self.registers
